@@ -12,8 +12,12 @@ st.set_page_config(page_title="Registro de Medidores", page_icon="📊", layout=
 st.title("📊 Registro de Medidores de Gas")
 st.markdown("Sube hasta 12 fotos de medidores y genera el Excel automáticamente.")
 
-API_KEY = st.secrets["GEMINI_API_KEY"]
-client = genai.Client(api_key=API_KEY)
+# Tres claves rotando automáticamente
+API_KEYS = [
+    st.secrets["GEMINI_API_KEY_1"],
+    st.secrets["GEMINI_API_KEY_2"],
+    st.secrets["GEMINI_API_KEY_3"],
+]
 
 prompt = """Analiza esta imagen de un medidor de gas.
 Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adicional:
@@ -36,18 +40,20 @@ Instrucciones:
 - serie_precinto: número del precinto de seguridad si es visible (ej: G0359688)
 Si no puedes leer algún dato, pon null."""
 
-def procesar_imagen(imagen):
-    for intento in range(3):
+def procesar_imagen(imagen, indice_medidor):
+    for key_idx, api_key in enumerate(API_KEYS):
         try:
+            client = genai.Client(api_key=api_key)
             respuesta = client.models.generate_content(
                 model="gemini-2.0-flash-lite",
                 contents=[prompt, imagen]
             )
             texto = respuesta.text.strip().replace("```json","").replace("```","")
             return json.loads(texto)
-        except Exception as e:
-            if intento < 2:
-                time.sleep(10)
+        except Exception:
+            if key_idx < len(API_KEYS) - 1:
+                time.sleep(3)
+                continue
             else:
                 return None
 
@@ -133,7 +139,7 @@ if fotos:
         for i, foto in enumerate(fotos[:12]):
             status.text(f"⏳ Procesando medidor {i+1} de {len(fotos)}...")
             imagen = PIL.Image.open(foto)
-            datos = procesar_imagen(imagen)
+            datos = procesar_imagen(imagen, i)
 
             if datos:
                 tabla.append(datos)
@@ -142,7 +148,7 @@ if fotos:
                 st.error(f"❌ No se pudo procesar el medidor {i+1}")
 
             progress.progress((i+1) / len(fotos))
-            time.sleep(6)
+            time.sleep(4)
 
         status.text("✅ Procesamiento completado.")
 
