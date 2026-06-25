@@ -12,7 +12,6 @@ st.set_page_config(page_title="Registro de Medidores", page_icon="📊", layout=
 st.title("📊 Registro de Medidores de Gas")
 st.markdown("Sube hasta 12 fotos de medidores y genera el Excel automáticamente.")
 
-# Tres claves rotando automáticamente
 API_KEYS = [
     st.secrets["GEMINI_API_KEY_1"],
     st.secrets["GEMINI_API_KEY_2"],
@@ -45,7 +44,7 @@ def procesar_imagen(imagen, indice_medidor):
         try:
             client = genai.Client(api_key=api_key)
             respuesta = client.models.generate_content(
-                model="gemini-2.0-flash-lite",
+                model="gemini-2.5-flash",
                 contents=[prompt, imagen]
             )
             texto = respuesta.text.strip().replace("```json","").replace("```","")
@@ -148,7 +147,7 @@ if fotos:
                 st.error(f"❌ No se pudo procesar el medidor {i+1}")
 
             progress.progress((i+1) / len(fotos))
-            time.sleep(4)
+            time.sleep(5)
 
         status.text("✅ Procesamiento completado.")
 
