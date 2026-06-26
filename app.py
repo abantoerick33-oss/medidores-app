@@ -8,7 +8,7 @@ import PIL.Image
 import json
 import time
 import io
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
@@ -205,7 +205,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
 # ─── INTERFAZ ───
 st.markdown("---")
 operario = st.selectbox("👤 Selecciona el operario:", OPERARIOS)
-fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+peru = timezone(timedelta(hours=-5))
+fecha = datetime.now(peru).strftime("%d/%m/%Y %H:%M")
 st.info(f"📅 Fecha y hora: {fecha}")
 
 st.markdown("---")
