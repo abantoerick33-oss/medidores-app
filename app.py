@@ -40,7 +40,7 @@ Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adi
 Instrucciones:
 - marca: nombre del fabricante (ej: METREX)
 - modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
-- serie_medidor: número de serie del medidor (ej: 3809043)
+- serie_precinto: número del precinto de seguridad. IMPORTANTE: el precinto puede aparecer al revés o rotado 180 grados en la imagen. Si ves caracteres que parecen invertidos o ilegibles, intenta leerlos como si rotaras la imagen 180 grados. El formato correcto siempre empieza con G seguido de 7 números (ej: G0454825). Nunca empieces con GUM u otras letras incorrectas.
 - registro: lectura actual del contador con todos los dígitos, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095)
 - unidad: unidad de medida del registro (ej: m³)
 - volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm³)
