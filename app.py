@@ -159,7 +159,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
             if fill:
                 c.fill = fill
 
-    # Firma de certificación
+    # Firma
     firma_fila = len(tabla) + 6
     ws.merge_cells(f"A{firma_fila}:H{firma_fila}")
     c = ws[f"A{firma_fila}"]
@@ -170,76 +170,49 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
     c.border = borde
     ws.row_dimensions[firma_fila].height = 20
 
-    # Anchos de columna
+    # Anchos columnas datos
     anchos = [12, 10, 15, 16, 12, 10, 15, 16]
     for i, ancho in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
-    # ─── SECCIÓN DE IMÁGENES (misma hoja, debajo) ───
+    # ─── IMÁGENES EN FILA HORIZONTAL ───
+    IMG_ANCHO = 100
+    IMG_ALTO = 80
+    total = len(fotos_bytes)
+
+    # Ajustar ancho de columnas para imágenes
+    for i in range(1, total + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 15
+
     img_inicio_fila = firma_fila + 3
 
     # Título sección imágenes
-    ws.merge_cells(f"A{img_inicio_fila}:H{img_inicio_fila}")
+    ws.merge_cells(f"A{img_inicio_fila}:{get_column_letter(max(total,1))}{img_inicio_fila}")
     c = ws[f"A{img_inicio_fila}"]
-    c.value = "EVIDENCIA FOTOGRÁFICA DE MEDIDORES"
+    c.value = "EVIDENCIA FOTOGRAFICA DE MEDIDORES"
     c.font = Font(bold=True, color=blanco, size=12)
     c.fill = PatternFill("solid", fgColor=azul_oscuro)
     c.alignment = Alignment(horizontal="center", vertical="center")
     c.border = borde
     ws.row_dimensions[img_inicio_fila].height = 24
 
-    # Imágenes en cuadrícula 3 por fila
-    IMG_ANCHO = 160
-    IMG_ALTO = 120
-    COLS_POR_FILA = 3
-    columnas_img = ["A", "C", "E"]
-    alto_fila_img = 95
-    alto_fila_label = 18
-
-    for idx, (foto_bytes, datos) in enumerate(zip(fotos_bytes, tabla), 0):
-        fila_bloque = idx // COLS_POR_FILA
-        col_bloque = idx % COLS_POR_FILA
-
-        fila_img = img_inicio_fila + 2 + fila_bloque * 8
-        fila_label = fila_img + 6
-
-        ws.row_dimensions[fila_img].height = alto_fila_img
-        ws.row_dimensions[fila_label].height = alto_fila_label
-
-        col_letra = columnas_img[col_bloque]
-
-        # Número y serie debajo de imagen
-        ws.merge_cells(f"{col_letra}{fila_label}:{chr(ord(col_letra)+1)}{fila_label}")
-        c = ws[f"{col_letra}{fila_label}"]
-        c.value = f"#{idx+1} — Serie: {datos['serie_medidor']}"
-        c.font = Font(bold=True, size=9, color=azul_oscuro)
+    # Fila de números
+    fila_num = img_inicio_fila + 1
+    for idx in range(total):
+        c = ws.cell(row=fila_num, column=idx + 1)
+        c.value = f"#{idx+1}"
+        c.font = Font(bold=True, color=blanco, size=10)
+        c.fill = PatternFill("solid", fgColor=rojo)
         c.alignment = Alignment(horizontal="center", vertical="center")
-        c.fill = PatternFill("solid", fgColor=azul_claro)
         c.border = borde
+    ws.row_dimensions[fila_num].height = 16
 
-        # Borde del cuadro de imagen
-        for r in range(fila_img, fila_label + 1):
-            for c_offset in range(2):
-                col_actual = get_column_letter(ord(col_letra) - 64 + c_offset)
-                cell = ws.cell(row=r, column=ord(col_letra) - 64 + c_offset)
-                cell.border = Border(
-                    left=Side(style='medium') if c_offset == 0 else Side(style='thin'),
-                    right=Side(style='medium') if c_offset == 1 else Side(style='thin'),
-                    top=Side(style='medium') if r == fila_img else Side(style='thin'),
-                    bottom=Side(style='medium') if r == fila_label else Side(style='thin')
-                )
-# Borde del cuadro de imagen
-        for r in range(fila_img, fila_label + 1):
-            for c_offset in range(2):
-                col_actual = get_column_letter(ord(col_letra) - 64 + c_offset)
-                cell = ws.cell(row=r, column=ord(col_letra) - 64 + c_offset)
-                cell.border = Border(
-                    left=Side(style='medium') if c_offset == 0 else Side(style='thin'),
-                    right=Side(style='medium') if c_offset == 1 else Side(style='thin'),
-                    top=Side(style='medium') if r == fila_img else Side(style='thin'),
-                    bottom=Side(style='medium') if r == fila_label else Side(style='thin')
-                )
+    # Fila de imágenes
+    fila_img = fila_num + 1
+    ws.row_dimensions[fila_img].height = 65
 
+    for idx, (foto_bytes, datos) in enumerate(zip(fotos_bytes, tabla)):
+        col = idx + 1
         try:
             img = PIL.Image.open(io.BytesIO(foto_bytes))
             img.thumbnail((IMG_ANCHO, IMG_ALTO))
@@ -249,9 +222,24 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
             xl_img = XLImage(img_buffer)
             xl_img.width = IMG_ANCHO
             xl_img.height = IMG_ALTO
-            ws.add_image(xl_img, f"{col_letra}{fila_img}")
+            ws.add_image(xl_img, f"{get_column_letter(col)}{fila_img}")
         except Exception:
-            ws[f"{col_letra}{fila_img}"] = "imagen no disponible"
+            ws.cell(row=fila_img, column=col).value = "N/D"
+
+        # Borde alrededor de imagen
+        ws.cell(row=fila_img, column=col).border = borde_medio
+
+    # Fila de series debajo de imágenes
+    fila_serie = fila_img + 5
+    for idx, datos in enumerate(tabla):
+        c = ws.cell(row=fila_serie, column=idx + 1)
+        c.value = datos["serie_medidor"]
+        c.font = Font(bold=True, size=8, color=azul_oscuro)
+        c.fill = PatternFill("solid", fgColor=azul_claro)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = borde
+    ws.row_dimensions[fila_serie].height = 16
+
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
