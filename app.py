@@ -3,10 +3,16 @@ from google import genai
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image as XLImage
 import PIL.Image
 import json
 import time
 import io
+import os
+from datetime import datetime
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google.oauth2 import service_account
 
 st.set_page_config(page_title="Registro de Medidores", page_icon="📊", layout="centered")
 st.title("📊 Registro de Medidores de Gas")
@@ -17,6 +23,9 @@ API_KEYS = [
     st.secrets["GEMINI_API_KEY_2"],
     st.secrets["GEMINI_API_KEY_3"],
 ]
+
+OPERARIOS = ["Joseph Erik Abanto Guerra", "Marco David Rodríguez Valencia"]
+FOLDER_ID = "1hPilAiAhOVBF2GIh6Y4WldLPks_wcqJI"
 
 prompt = """Analiza esta imagen de un medidor de gas.
 Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adicional:
@@ -39,6 +48,25 @@ Instrucciones:
 - serie_precinto: número del precinto de seguridad si es visible (ej: G0359688)
 Si no puedes leer algún dato, pon null."""
 
+def get_drive_service():
+    creds_dict = json.loads(st.secrets["GOOGLE_DRIVE_CREDENTIALS"])
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/drive"]
+    )
+    return build("drive", "v3", credentials=creds)
+
+def subir_a_drive(buffer, nombre_archivo):
+    try:
+        service = get_drive_service()
+        media = MediaIoBaseUpload(buffer, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        file_metadata = {"name": nombre_archivo, "parents": [FOLDER_ID]}
+        service.files().create(body=file_metadata, media_body=media).execute()
+        return True
+    except Exception as e:
+        st.warning(f"No se pudo guardar en Drive: {e}")
+        return False
+
 def procesar_imagen(imagen, indice_medidor):
     for key_idx, api_key in enumerate(API_KEYS):
         try:
@@ -56,10 +84,12 @@ def procesar_imagen(imagen, indice_medidor):
             else:
                 return None
 
-def generar_excel(tabla):
+def generar_excel(tabla, fotos, operario, fecha):
     wb = Workbook()
+
+    # ─── HOJA 1: DATOS ───
     ws = wb.active
-    ws.title = "Medidores"
+    ws.title = "Datos"
 
     azul_oscuro = "1F3864"
     rojo = "C00000"
@@ -71,10 +101,19 @@ def generar_excel(tabla):
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    ws.merge_cells("A1:D1")
-    ws.merge_cells("E1:H1")
+    # Encabezado con info del lote
+    ws.merge_cells("A1:H1")
+    c = ws["A1"]
+    c.value = f"Laboratorio de Medidores — Operario: {operario} — Fecha: {fecha}"
+    c.font = Font(bold=True, color=blanco, size=11)
+    c.fill = PatternFill("solid", fgColor=azul_oscuro)
+    c.alignment = Alignment(horizontal="center", vertical="center")
+    c.border = borde
 
-    for celda, texto_enc in [("A1", "Datos del medidor"), ("E1", "Precintos")]:
+    ws.merge_cells("A2:D2")
+    ws.merge_cells("E2:H2")
+
+    for celda, texto_enc in [("A2", "Datos del medidor"), ("E2", "Precintos")]:
         c = ws[celda]
         c.value = texto_enc
         c.font = Font(bold=True, color=blanco, size=11)
@@ -86,14 +125,14 @@ def generar_excel(tabla):
                       "Tipo", "Color", "Nro. de serie", "Registro Inicial"]
 
     for i, titulo in enumerate(subencabezados, 1):
-        c = ws.cell(row=2, column=i)
+        c = ws.cell(row=3, column=i)
         c.value = titulo
         c.font = Font(bold=True, color=blanco, size=10)
         c.fill = PatternFill("solid", fgColor=rojo)
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = borde
 
-    for fila_idx, datos in enumerate(tabla, 3):
+    for fila_idx, datos in enumerate(tabla, 4):
         fila = [
             datos["marca"], datos["modelo"], datos["serie_medidor"],
             datos["volumen_ciclico"], "Circular", "Verde",
@@ -108,12 +147,54 @@ def generar_excel(tabla):
             if fill:
                 c.fill = fill
 
+    # Firma de confirmación
+    ultima_fila = len(tabla) + 5
+    ws.merge_cells(f"A{ultima_fila}:H{ultima_fila}")
+    c = ws[f"A{ultima_fila}"]
+    c.value = f"Certifico que el proceso fue supervisado correctamente — {operario} — {fecha}"
+    c.font = Font(bold=True, italic=True, size=10)
+    c.alignment = Alignment(horizontal="center")
+
     anchos = [12, 10, 15, 16, 12, 10, 15, 16]
     for i, ancho in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
     ws.row_dimensions[1].height = 20
     ws.row_dimensions[2].height = 18
+    ws.row_dimensions[3].height = 18
+
+    # ─── HOJA 2: IMÁGENES ───
+    ws2 = wb.create_sheet(title="Imágenes")
+    ws2.column_dimensions["A"].width = 5
+    ws2.column_dimensions["B"].width = 40
+    ws2.column_dimensions["C"].width = 20
+
+    ws2["A1"] = "N°"
+    ws2["B1"] = "Foto del medidor"
+    ws2["C1"] = "Serie"
+    for col in ["A1", "B1", "C1"]:
+        ws2[col].font = Font(bold=True, color=blanco)
+        ws2[col].fill = PatternFill("solid", fgColor=azul_oscuro)
+        ws2[col].alignment = Alignment(horizontal="center")
+
+    for idx, (foto, datos) in enumerate(zip(fotos, tabla), 1):
+        fila = 2 + (idx - 1) * 20
+        ws2.row_dimensions[fila].height = 120
+        ws2.cell(row=fila, column=1).value = idx
+        ws2.cell(row=fila, column=3).value = datos["serie_medidor"]
+
+        try:
+            img = PIL.Image.open(foto)
+            img.thumbnail((280, 200))
+            img_buffer = io.BytesIO()
+            img.save(img_buffer, format="PNG")
+            img_buffer.seek(0)
+            xl_img = XLImage(img_buffer)
+            xl_img.width = 280
+            xl_img.height = 200
+            ws2.add_image(xl_img, f"B{fila}")
+        except Exception:
+            ws2.cell(row=fila, column=2).value = "imagen no disponible"
 
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -121,6 +202,12 @@ def generar_excel(tabla):
     return buffer
 
 # ─── INTERFAZ ───
+st.markdown("---")
+operario = st.selectbox("👤 Selecciona el operario:", OPERARIOS)
+fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+st.info(f"📅 Fecha y hora: {fecha}")
+
+st.markdown("---")
 fotos = st.file_uploader(
     "📷 Sube las fotos de los medidores (hasta 12)",
     type=["jpg", "jpeg", "png"],
@@ -137,6 +224,7 @@ if fotos:
 
         for i, foto in enumerate(fotos[:12]):
             status.text(f"⏳ Procesando medidor {i+1} de {len(fotos)}...")
+            foto.seek(0)
             imagen = PIL.Image.open(foto)
             datos = procesar_imagen(imagen, i)
 
@@ -155,18 +243,39 @@ if fotos:
             st.markdown("---")
             st.subheader("📋 Tabla completa del lote")
             st.table([{
+                "N°": i+1,
                 "Marca": d["marca"],
                 "Modelo": d["modelo"],
                 "Serie": d["serie_medidor"],
                 "Registro": f"{d['registro']} {d['unidad']}",
                 "Vol. Cíclico": d["volumen_ciclico"],
                 "Precinto": d["serie_precinto"]
-            } for d in tabla])
+            } for i, d in enumerate(tabla)])
 
-            excel = generar_excel(tabla)
-            st.download_button(
-                label="📥 Descargar Excel",
-                data=excel,
-                file_name="medidores_lote.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.markdown("---")
+            confirmado = st.checkbox(f"✅ Confirmo que el proceso fue supervisado correctamente por {operario}")
+
+            if confirmado:
+                nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}.xlsx"
+
+                for i, foto in enumerate(fotos):
+                    foto.seek(0)
+
+                excel = generar_excel(tabla, fotos[:12], operario, fecha)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="📥 Descargar Excel",
+                        data=excel,
+                        file_name=nombre_archivo,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                with col2:
+                    excel.seek(0)
+                    if st.button("☁️ Guardar en Drive"):
+                        with st.spinner("Guardando en Google Drive..."):
+                            if subir_a_drive(excel, nombre_archivo):
+                                st.success("✅ Guardado en Google Drive correctamente.")
+            else:
+                st.warning("⚠️ Debes confirmar la supervisión antes de descargar el Excel.")
