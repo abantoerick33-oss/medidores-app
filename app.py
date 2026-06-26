@@ -70,9 +70,22 @@ def get_drive_service():
 def subir_a_drive(buffer, nombre_archivo):
     try:
         service = get_drive_service()
-        media = MediaIoBaseUpload(buffer, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        file_metadata = {"name": nombre_archivo, "parents": [FOLDER_ID]}
-        service.files().create(body=file_metadata, media_body=media).execute()
+        media = MediaIoBaseUpload(
+            buffer,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            resumable=True
+        )
+        file_metadata = {
+            "name": nombre_archivo,
+            "parents": [FOLDER_ID],
+            "driveId": FOLDER_ID
+        }
+        service.files().create(
+            body=file_metadata,
+            media_body=media,
+            supportsAllDrives=True,
+            fields="id"
+        ).execute()
         return True
     except Exception as e:
         st.warning(f"No se pudo guardar en Drive: {e}")
