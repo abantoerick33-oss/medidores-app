@@ -8,7 +8,6 @@ import PIL.Image
 import json
 import time
 import io
-import os
 from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -48,6 +47,18 @@ Instrucciones:
 - serie_precinto: número del precinto de seguridad si es visible (ej: G0359688)
 Si no puedes leer algún dato, pon null."""
 
+# Inicializar sesión
+if "tabla" not in st.session_state:
+    st.session_state.tabla = []
+if "fotos_bytes" not in st.session_state:
+    st.session_state.fotos_bytes = []
+if "procesado" not in st.session_state:
+    st.session_state.procesado = False
+if "operario_guardado" not in st.session_state:
+    st.session_state.operario_guardado = ""
+if "fecha_guardada" not in st.session_state:
+    st.session_state.fecha_guardada = ""
+
 def get_drive_service():
     creds_dict = json.loads(st.secrets["GOOGLE_DRIVE_CREDENTIALS"])
     creds = service_account.Credentials.from_service_account_info(
@@ -67,7 +78,7 @@ def subir_a_drive(buffer, nombre_archivo):
         st.warning(f"No se pudo guardar en Drive: {e}")
         return False
 
-def procesar_imagen(imagen, indice_medidor):
+def procesar_imagen(imagen):
     for key_idx, api_key in enumerate(API_KEYS):
         try:
             client = genai.Client(api_key=api_key)
@@ -84,10 +95,8 @@ def procesar_imagen(imagen, indice_medidor):
             else:
                 return None
 
-def generar_excel(tabla, fotos, operario, fecha):
+def generar_excel(tabla, fotos_bytes, operario, fecha):
     wb = Workbook()
-
-    # ─── HOJA 1: DATOS ───
     ws = wb.active
     ws.title = "Datos"
 
@@ -101,7 +110,6 @@ def generar_excel(tabla, fotos, operario, fecha):
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    # Encabezado con info del lote
     ws.merge_cells("A1:H1")
     c = ws["A1"]
     c.value = f"Laboratorio de Medidores — Operario: {operario} — Fecha: {fecha}"
@@ -109,10 +117,10 @@ def generar_excel(tabla, fotos, operario, fecha):
     c.fill = PatternFill("solid", fgColor=azul_oscuro)
     c.alignment = Alignment(horizontal="center", vertical="center")
     c.border = borde
+    ws.row_dimensions[1].height = 20
 
     ws.merge_cells("A2:D2")
     ws.merge_cells("E2:H2")
-
     for celda, texto_enc in [("A2", "Datos del medidor"), ("E2", "Precintos")]:
         c = ws[celda]
         c.value = texto_enc
@@ -120,10 +128,10 @@ def generar_excel(tabla, fotos, operario, fecha):
         c.fill = PatternFill("solid", fgColor=azul_oscuro)
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = borde
+    ws.row_dimensions[2].height = 18
 
     subencabezados = ["Marca", "Modelo", "Nro. de serie", "Volumen Cíclico",
                       "Tipo", "Color", "Nro. de serie", "Registro Inicial"]
-
     for i, titulo in enumerate(subencabezados, 1):
         c = ws.cell(row=3, column=i)
         c.value = titulo
@@ -131,6 +139,7 @@ def generar_excel(tabla, fotos, operario, fecha):
         c.fill = PatternFill("solid", fgColor=rojo)
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = borde
+    ws.row_dimensions[3].height = 18
 
     for fila_idx, datos in enumerate(tabla, 4):
         fila = [
@@ -147,7 +156,6 @@ def generar_excel(tabla, fotos, operario, fecha):
             if fill:
                 c.fill = fill
 
-    # Firma de confirmación
     ultima_fila = len(tabla) + 5
     ws.merge_cells(f"A{ultima_fila}:H{ultima_fila}")
     c = ws[f"A{ultima_fila}"]
@@ -159,32 +167,25 @@ def generar_excel(tabla, fotos, operario, fecha):
     for i, ancho in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
-    ws.row_dimensions[1].height = 20
-    ws.row_dimensions[2].height = 18
-    ws.row_dimensions[3].height = 18
-
-    # ─── HOJA 2: IMÁGENES ───
+    # Hoja de imágenes
     ws2 = wb.create_sheet(title="Imágenes")
     ws2.column_dimensions["A"].width = 5
     ws2.column_dimensions["B"].width = 40
     ws2.column_dimensions["C"].width = 20
 
-    ws2["A1"] = "N°"
-    ws2["B1"] = "Foto del medidor"
-    ws2["C1"] = "Serie"
-    for col in ["A1", "B1", "C1"]:
+    for col, titulo in [("A1", "N°"), ("B1", "Foto del medidor"), ("C1", "Serie")]:
+        ws2[col] = titulo
         ws2[col].font = Font(bold=True, color=blanco)
         ws2[col].fill = PatternFill("solid", fgColor=azul_oscuro)
         ws2[col].alignment = Alignment(horizontal="center")
 
-    for idx, (foto, datos) in enumerate(zip(fotos, tabla), 1):
-        fila = 2 + (idx - 1) * 20
-        ws2.row_dimensions[fila].height = 120
+    for idx, (foto_bytes, datos) in enumerate(zip(fotos_bytes, tabla), 1):
+        fila = 2 + (idx - 1) * 22
+        ws2.row_dimensions[fila].height = 150
         ws2.cell(row=fila, column=1).value = idx
         ws2.cell(row=fila, column=3).value = datos["serie_medidor"]
-
         try:
-            img = PIL.Image.open(foto)
+            img = PIL.Image.open(io.BytesIO(foto_bytes))
             img.thumbnail((280, 200))
             img_buffer = io.BytesIO()
             img.save(img_buffer, format="PNG")
@@ -218,18 +219,25 @@ if fotos:
     st.info(f"📂 {len(fotos)} foto(s) seleccionada(s)")
 
     if st.button("🚀 Procesar medidores", type="primary"):
-        tabla = []
+        st.session_state.tabla = []
+        st.session_state.fotos_bytes = []
+        st.session_state.procesado = False
+        st.session_state.operario_guardado = operario
+        st.session_state.fecha_guardada = fecha
+
         progress = st.progress(0)
         status = st.empty()
 
         for i, foto in enumerate(fotos[:12]):
             status.text(f"⏳ Procesando medidor {i+1} de {len(fotos)}...")
             foto.seek(0)
-            imagen = PIL.Image.open(foto)
-            datos = procesar_imagen(imagen, i)
+            foto_bytes = foto.read()
+            st.session_state.fotos_bytes.append(foto_bytes)
+            imagen = PIL.Image.open(io.BytesIO(foto_bytes))
+            datos = procesar_imagen(imagen)
 
             if datos:
-                tabla.append(datos)
+                st.session_state.tabla.append(datos)
                 st.success(f"✅ Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
                 st.error(f"❌ No se pudo procesar el medidor {i+1}")
@@ -237,45 +245,48 @@ if fotos:
             progress.progress((i+1) / len(fotos))
             time.sleep(5)
 
+        st.session_state.procesado = True
         status.text("✅ Procesamiento completado.")
 
-        if tabla:
-            st.markdown("---")
-            st.subheader("📋 Tabla completa del lote")
-            st.table([{
-                "N°": i+1,
-                "Marca": d["marca"],
-                "Modelo": d["modelo"],
-                "Serie": d["serie_medidor"],
-                "Registro": f"{d['registro']} {d['unidad']}",
-                "Vol. Cíclico": d["volumen_ciclico"],
-                "Precinto": d["serie_precinto"]
-            } for i, d in enumerate(tabla)])
+# Mostrar resultados si ya se procesó
+if st.session_state.procesado and st.session_state.tabla:
+    tabla = st.session_state.tabla
+    fotos_bytes = st.session_state.fotos_bytes
+    operario = st.session_state.operario_guardado
+    fecha = st.session_state.fecha_guardada
 
-            st.markdown("---")
-            confirmado = st.checkbox(f"✅ Confirmo que el proceso fue supervisado correctamente por {operario}")
+    st.markdown("---")
+    st.subheader("📋 Tabla completa del lote")
+    st.table([{
+        "N°": i+1,
+        "Marca": d["marca"],
+        "Modelo": d["modelo"],
+        "Serie": d["serie_medidor"],
+        "Registro": f"{d['registro']} {d['unidad']}",
+        "Vol. Cíclico": d["volumen_ciclico"],
+        "Precinto": d["serie_precinto"]
+    } for i, d in enumerate(tabla)])
 
-            if confirmado:
-                nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}.xlsx"
+    st.markdown("---")
+    confirmado = st.checkbox(f"✅ Confirmo que el proceso fue supervisado correctamente por {operario}")
 
-                for i, foto in enumerate(fotos):
-                    foto.seek(0)
+    if confirmado:
+        nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}.xlsx"
+        excel = generar_excel(tabla, fotos_bytes, operario, fecha)
 
-                excel = generar_excel(tabla, fotos[:12], operario, fecha)
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        label="📥 Descargar Excel",
-                        data=excel,
-                        file_name=nombre_archivo,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                with col2:
-                    excel.seek(0)
-                    if st.button("☁️ Guardar en Drive"):
-                        with st.spinner("Guardando en Google Drive..."):
-                            if subir_a_drive(excel, nombre_archivo):
-                                st.success("✅ Guardado en Google Drive correctamente.")
-            else:
-                st.warning("⚠️ Debes confirmar la supervisión antes de descargar el Excel.")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="📥 Descargar Excel",
+                data=excel,
+                file_name=nombre_archivo,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        with col2:
+            if st.button("☁️ Guardar en Drive"):
+                excel.seek(0)
+                with st.spinner("Guardando en Google Drive..."):
+                    if subir_a_drive(excel, nombre_archivo):
+                        st.success("✅ Guardado en Google Drive correctamente.")
+    else:
+        st.warning("⚠️ Debes confirmar la supervisión antes de descargar el Excel.")
