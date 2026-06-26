@@ -217,6 +217,29 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
         c.fill = PatternFill("solid", fgColor=azul_claro)
         c.border = borde
 
+        # Borde del cuadro de imagen
+        for r in range(fila_img, fila_label + 1):
+            for c_offset in range(2):
+                col_actual = get_column_letter(ord(col_letra) - 64 + c_offset)
+                cell = ws.cell(row=r, column=ord(col_letra) - 64 + c_offset)
+                cell.border = Border(
+                    left=Side(style='medium') if c_offset == 0 else Side(style='thin'),
+                    right=Side(style='medium') if c_offset == 1 else Side(style='thin'),
+                    top=Side(style='medium') if r == fila_img else Side(style='thin'),
+                    bottom=Side(style='medium') if r == fila_label else Side(style='thin')
+                )
+# Borde del cuadro de imagen
+        for r in range(fila_img, fila_label + 1):
+            for c_offset in range(2):
+                col_actual = get_column_letter(ord(col_letra) - 64 + c_offset)
+                cell = ws.cell(row=r, column=ord(col_letra) - 64 + c_offset)
+                cell.border = Border(
+                    left=Side(style='medium') if c_offset == 0 else Side(style='thin'),
+                    right=Side(style='medium') if c_offset == 1 else Side(style='thin'),
+                    top=Side(style='medium') if r == fila_img else Side(style='thin'),
+                    bottom=Side(style='medium') if r == fila_label else Side(style='thin')
+                )
+
         try:
             img = PIL.Image.open(io.BytesIO(foto_bytes))
             img.thumbnail((IMG_ANCHO, IMG_ALTO))
@@ -229,7 +252,6 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
             ws.add_image(xl_img, f"{col_letra}{fila_img}")
         except Exception:
             ws[f"{col_letra}{fila_img}"] = "imagen no disponible"
-
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
