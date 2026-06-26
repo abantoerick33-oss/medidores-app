@@ -40,24 +40,13 @@ Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adi
 Instrucciones:
 - marca: nombre del fabricante (ej: METREX)
 - modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
-- serie_medidor: número de serie del medidor (ej: 3809043)
-- registro: lectura actual del contador con todos los dígitos incluyendo los que están en rojo, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095). Los dígitos en rojo son parte del registro.
-- unidad: unidad de medida del registro (ej: m³)
-- volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm³)
-- serie_precinto: busca con mucho cuidado el número del precinto de seguridad. Puede ser una etiqueta pequeña colgante o pegada al medidor. IMPORTANTE: puede estar rotado o al revés 180 grados. El formato siempre empieza con G seguido de 7 dígitos numéricos (ej: G0454825, G0457243). Si ves letras como GUM u otras combinaciones raras, intenta leer rotando 180 grados. Si definitivamente no es visible, pon null.
-Si no puedes leer algún dato, pon null."""
-}
-Instrucciones:
-- marca: nombre del fabricante (ej: METREX)
-- modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
-- serie_precinto: número del precinto de seguridad. IMPORTANTE: el precinto puede aparecer al revés o rotado 180 grados en la imagen. Si ves caracteres que parecen invertidos o ilegibles, intenta leerlos como si rotaras la imagen 180 grados. El formato correcto siempre empieza con G seguido de 7 números (ej: G0454825). Nunca empieces con GUM u otras letras incorrectas.
-- registro: lectura actual del contador con todos los dígitos, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095)
-- unidad: unidad de medida del registro (ej: m³)
-- volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm³)
-- serie_precinto: número del precinto de seguridad si es visible (ej: G0359688)
-Si no puedes leer algún dato, pon null."""
+- serie_medidor: numero de serie del medidor (ej: 3809043)
+- registro: lectura actual del contador con todos los digitos incluyendo los que estan en rojo, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095). Los digitos en rojo son parte del registro.
+- unidad: unidad de medida del registro (ej: m3)
+- volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm3)
+- serie_precinto: busca con mucho cuidado el numero del precinto de seguridad. Puede ser una etiqueta pequena colgante o pegada al medidor. IMPORTANTE: puede estar rotado o al reves 180 grados. El formato siempre empieza con G seguido de 7 digitos numericos (ej: G0454825, G0457243). Si ves letras como GUM u otras combinaciones raras, intenta leer rotando 180 grados. Si definitivamente no es visible, pon null.
+Si no puedes leer algun dato, pon null."""
 
-# Inicializar sesión
 if "tabla" not in st.session_state:
     st.session_state.tabla = []
 if "fotos_bytes" not in st.session_state:
@@ -87,8 +76,7 @@ def subir_a_drive(buffer, nombre_archivo):
         )
         file_metadata = {
             "name": nombre_archivo,
-            "parents": [FOLDER_ID],
-            "driveId": FOLDER_ID
+            "parents": [FOLDER_ID]
         }
         service.files().create(
             body=file_metadata,
@@ -153,7 +141,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
         c.border = borde
     ws.row_dimensions[2].height = 18
 
-    subencabezados = ["Marca", "Modelo", "Nro. de serie", "Volumen Cíclico",
+    subencabezados = ["Marca", "Modelo", "Nro. de serie", "Volumen Ciclico",
                       "Tipo", "Color", "Nro. de serie", "Registro Inicial"]
     for i, titulo in enumerate(subencabezados, 1):
         c = ws.cell(row=3, column=i)
@@ -190,13 +178,12 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
     for i, ancho in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
-    # Hoja de imágenes
-    ws2 = wb.create_sheet(title="Imágenes")
+    ws2 = wb.create_sheet(title="Imagenes")
     ws2.column_dimensions["A"].width = 5
     ws2.column_dimensions["B"].width = 40
     ws2.column_dimensions["C"].width = 20
 
-    for col, titulo in [("A1", "N°"), ("B1", "Foto del medidor"), ("C1", "Serie")]:
+    for col, titulo in [("A1", "N"), ("B1", "Foto del medidor"), ("C1", "Serie")]:
         ws2[col] = titulo
         ws2[col].font = Font(bold=True, color=blanco)
         ws2[col].fill = PatternFill("solid", fgColor=azul_oscuro)
@@ -225,24 +212,24 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
     buffer.seek(0)
     return buffer
 
-# ─── INTERFAZ ───
+# INTERFAZ
 st.markdown("---")
-operario = st.selectbox("👤 Selecciona el operario:", OPERARIOS)
+operario = st.selectbox("Selecciona el operario:", OPERARIOS)
 peru = timezone(timedelta(hours=-5))
 fecha = datetime.now(peru).strftime("%d/%m/%Y %H:%M")
-st.info(f"📅 Fecha y hora: {fecha}")
+st.info(f"Fecha y hora: {fecha}")
 
 st.markdown("---")
 fotos = st.file_uploader(
-    "📷 Sube las fotos de los medidores (hasta 12)",
+    "Sube las fotos de los medidores (hasta 12)",
     type=["jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 
 if fotos:
-    st.info(f"📂 {len(fotos)} foto(s) seleccionada(s)")
+    st.info(f"{len(fotos)} foto(s) seleccionada(s)")
 
-    if st.button("🚀 Procesar medidores", type="primary"):
+    if st.button("Procesar medidores", type="primary"):
         st.session_state.tabla = []
         st.session_state.fotos_bytes = []
         st.session_state.procesado = False
@@ -253,7 +240,7 @@ if fotos:
         status = st.empty()
 
         for i, foto in enumerate(fotos[:12]):
-            status.text(f"⏳ Procesando medidor {i+1} de {len(fotos)}...")
+            status.text(f"Procesando medidor {i+1} de {len(fotos)}...")
             foto.seek(0)
             foto_bytes = foto.read()
             st.session_state.fotos_bytes.append(foto_bytes)
@@ -262,17 +249,16 @@ if fotos:
 
             if datos:
                 st.session_state.tabla.append(datos)
-                st.success(f"✅ Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
+                st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
-                st.error(f"❌ No se pudo procesar el medidor {i+1}")
+                st.error(f"No se pudo procesar el medidor {i+1}")
 
             progress.progress((i+1) / len(fotos))
             time.sleep(5)
 
         st.session_state.procesado = True
-        status.text("✅ Procesamiento completado.")
+        status.text("Procesamiento completado.")
 
-# Mostrar resultados si ya se procesó
 if st.session_state.procesado and st.session_state.tabla:
     tabla = st.session_state.tabla
     fotos_bytes = st.session_state.fotos_bytes
@@ -280,19 +266,19 @@ if st.session_state.procesado and st.session_state.tabla:
     fecha = st.session_state.fecha_guardada
 
     st.markdown("---")
-    st.subheader("📋 Tabla completa del lote")
+    st.subheader("Tabla completa del lote")
     st.table([{
-        "N°": i+1,
+        "N": i+1,
         "Marca": d["marca"],
         "Modelo": d["modelo"],
         "Serie": d["serie_medidor"],
         "Registro": f"{d['registro']} {d['unidad']}",
-        "Vol. Cíclico": d["volumen_ciclico"],
+        "Vol. Ciclico": d["volumen_ciclico"],
         "Precinto": d["serie_precinto"]
     } for i, d in enumerate(tabla)])
 
     st.markdown("---")
-    confirmado = st.checkbox(f"✅ Confirmo que el proceso fue supervisado correctamente por {operario}")
+    confirmado = st.checkbox(f"Confirmo que el proceso fue supervisado correctamente por {operario}")
 
     if confirmado:
         nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}.xlsx"
@@ -301,16 +287,16 @@ if st.session_state.procesado and st.session_state.tabla:
         col1, col2 = st.columns(2)
         with col1:
             st.download_button(
-                label="📥 Descargar Excel",
+                label="Descargar Excel",
                 data=excel,
                 file_name=nombre_archivo,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         with col2:
-            if st.button("☁️ Guardar en Drive"):
+            if st.button("Guardar en Drive"):
                 excel.seek(0)
                 with st.spinner("Guardando en Google Drive..."):
                     if subir_a_drive(excel, nombre_archivo):
-                        st.success("✅ Guardado en Google Drive correctamente.")
+                        st.success("Guardado en Google Drive correctamente.")
     else:
-        st.warning("⚠️ Debes confirmar la supervisión antes de descargar el Excel.")
+        st.warning("Debes confirmar la supervision antes de descargar el Excel.")
