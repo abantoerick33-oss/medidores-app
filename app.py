@@ -26,7 +26,7 @@ API_KEYS = [
 OPERARIOS = ["Joseph Erik Abanto Guerra", "Marco David Rodríguez Valencia"]
 FOLDER_ID = "1hPilAiAhOVBF2GIh6Y4WldLPks_wcqJI"
 
-prompt = """Analiza esta imagen de un medidor de gas.
+prompt = """Analiza esta imagen de un medidor de gas con mucho detalle.
 Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adicional:
 {
   "marca": "",
@@ -36,6 +36,16 @@ Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adi
   "unidad": "",
   "volumen_ciclico": "",
   "serie_precinto": ""
+}
+Instrucciones:
+- marca: nombre del fabricante (ej: METREX)
+- modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
+- serie_medidor: número de serie del medidor (ej: 3809043)
+- registro: lectura actual del contador con todos los dígitos incluyendo los que están en rojo, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095). Los dígitos en rojo son parte del registro.
+- unidad: unidad de medida del registro (ej: m³)
+- volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm³)
+- serie_precinto: busca con mucho cuidado el número del precinto de seguridad. Puede ser una etiqueta pequeña colgante o pegada al medidor. IMPORTANTE: puede estar rotado o al revés 180 grados. El formato siempre empieza con G seguido de 7 dígitos numéricos (ej: G0454825, G0457243). Si ves letras como GUM u otras combinaciones raras, intenta leer rotando 180 grados. Si definitivamente no es visible, pon null.
+Si no puedes leer algún dato, pon null."""
 }
 Instrucciones:
 - marca: nombre del fabricante (ej: METREX)
