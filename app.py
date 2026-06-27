@@ -4,6 +4,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as XLImage
+from openpyxl.chart import PieChart, Reference
+from openpyxl.chart.series import DataPoint
 import PIL.Image
 import json
 import time
@@ -53,6 +55,8 @@ if "operario_guardado" not in st.session_state:
     st.session_state.operario_guardado = ""
 if "fecha_guardada" not in st.session_state:
     st.session_state.fecha_guardada = ""
+if "lote_guardado" not in st.session_state:
+    st.session_state.lote_guardado = ""
 
 def procesar_imagen(imagen):
     for key_idx, api_key in enumerate(API_KEYS):
@@ -71,18 +75,35 @@ def procesar_imagen(imagen):
             else:
                 return None
 
-def generar_excel(tabla, fotos_bytes, operario, fecha):
+def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
+           color_fondo=None, alineacion="center", borde=None, alto=None, italica=False):
+    c = ws[celda] if isinstance(celda, str) else celda
+    c.value = valor
+    c.font = Font(bold=negrita, size=tam, color=color_texto, italic=italica)
+    c.alignment = Alignment(horizontal=alineacion, vertical="center", wrap_text=True)
+    if color_fondo:
+        c.fill = PatternFill("solid", fgColor=color_fondo)
+    if borde:
+        c.border = borde
+    return c
+
+def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Registro de Medidores"
+    ws.title = "Registro"
 
-    azul_oscuro = "1F3864"
-    rojo = "C00000"
-    blanco = "FFFFFF"
-    gris_claro = "F2F2F2"
-    azul_claro = "D9E1F2"
+    # Colores
+    AZUL = "1B3A6B"
+    VERDE = "1E7A3E"
+    ROJO = "C00000"
+    BLANCO = "FFFFFF"
+    GRIS = "F5F5F5"
+    AZUL_CLARO = "D6E4F0"
+    VERDE_CLARO = "D5F5E3"
+    AMARILLO = "FFF3CD"
+    NARANJA = "E67E22"
 
-    borde = Border(
+    borde_fino = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
@@ -91,154 +112,225 @@ def generar_excel(tabla, fotos_bytes, operario, fecha):
         top=Side(style='medium'), bottom=Side(style='medium')
     )
 
-    # Título principal
-    ws.merge_cells("A1:H1")
-    c = ws["A1"]
-    c.value = "LABORATORIO DE MEDIDORES DE GAS"
-    c.font = Font(bold=True, color=blanco, size=14)
-    c.fill = PatternFill("solid", fgColor=azul_oscuro)
-    c.alignment = Alignment(horizontal="center", vertical="center")
-    c.border = borde
-    ws.row_dimensions[1].height = 28
+    total = len(tabla)
+    correctos = total
+    observados = 0
+    rechazados = 0
 
-    # Info operario y fecha
+    # Anchos de columna
+    anchos = [4, 10, 8, 14, 10, 10, 10, 14, 14, 8, 4, 12, 4, 10, 6, 18]
+    for i, a in enumerate(anchos, 1):
+        ws.column_dimensions[get_column_letter(i)].width = a
+
+    # ── FILA 1: TÍTULO PRINCIPAL ──
+    ws.merge_cells("A1:P1")
+    c = estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
+               negrita=True, tam=16, color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+    ws.row_dimensions[1].height = 36
+
+    # ── FILA 2: INFO OPERARIO / FECHA / LOTE ──
     ws.merge_cells("A2:D2")
-    c = ws["A2"]
-    c.value = f"Operario: {operario}"
-    c.font = Font(bold=True, size=10)
-    c.fill = PatternFill("solid", fgColor=azul_claro)
-    c.alignment = Alignment(horizontal="left", vertical="center")
-    c.border = borde
+    estilo(ws, "A2", f"Operario:  {operario}", negrita=True, tam=10,
+           color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
 
-    ws.merge_cells("E2:H2")
-    c = ws["E2"]
-    c.value = f"Fecha: {fecha}"
-    c.font = Font(bold=True, size=10)
-    c.fill = PatternFill("solid", fgColor=azul_claro)
-    c.alignment = Alignment(horizontal="right", vertical="center")
-    c.border = borde
-    ws.row_dimensions[2].height = 20
+    ws.merge_cells("E2:J2")
+    estilo(ws, "E2", f"Fecha y hora:  {fecha}", negrita=True, tam=10,
+           color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
 
-    # Encabezados de grupo
-    ws.merge_cells("A3:D3")
-    ws.merge_cells("E3:H3")
-    for celda, texto_enc in [("A3", "Datos del medidor"), ("E3", "Precintos")]:
-        c = ws[celda]
-        c.value = texto_enc
-        c.font = Font(bold=True, color=blanco, size=11)
-        c.fill = PatternFill("solid", fgColor=azul_oscuro)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = borde
-    ws.row_dimensions[3].height = 20
+    ws.merge_cells("K2:P2")
+    estilo(ws, "K2", f"Lote:  {lote}", negrita=True, tam=11,
+           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino, alineacion="center")
+    ws.row_dimensions[2].height = 22
 
-    # Subencabezados
-    subencabezados = ["Marca", "Modelo", "Nro. de serie", "Volumen Ciclico",
-                      "Tipo", "Color", "Nro. de serie", "Registro Inicial"]
-    for i, titulo in enumerate(subencabezados, 1):
-        c = ws.cell(row=4, column=i)
-        c.value = titulo
-        c.font = Font(bold=True, color=blanco, size=10)
-        c.fill = PatternFill("solid", fgColor=rojo)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = borde
-    ws.row_dimensions[4].height = 18
+    # ── FILA 3-4: TARJETAS DE RESUMEN ──
+    ws.row_dimensions[3].height = 18
+    ws.row_dimensions[4].height = 28
 
-    # Datos
-    for fila_idx, datos in enumerate(tabla, 5):
-        fila = [
-            datos["marca"], datos["modelo"], datos["serie_medidor"],
+    tarjetas = [
+        ("A3", "B4", "Total de medidores", str(total), AZUL, AZUL_CLARO),
+        ("C3", "D4", "Supervisados", f"{correctos} (100%)", VERDE, VERDE_CLARO),
+        ("E3", "F4", "Vol. Ciclico", "0.7 dm3 (fijo)", "7D3C98", "F4ECF7"),
+        ("G3", "H4", "Color registrado", "Verde", VERDE, VERDE_CLARO),
+        ("I3", "J4", "Total registros", str(total), NARANJA, AMARILLO),
+    ]
+
+    for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
+        ws.merge_cells(f"{inicio}:{chr(ord(inicio[0]))}{fin[-1]}")
+        ws.merge_cells(f"{inicio[0]}{int(inicio[1])+1}:{fin}")
+        estilo(ws, inicio, titulo, negrita=True, tam=8,
+               color_texto=BLANCO, color_fondo=color_t, borde=borde_fino)
+        celda_val = f"{inicio[0]}{int(inicio[1])+1}"
+        estilo(ws, celda_val, valor, negrita=True, tam=13,
+               color_fondo=color_v, borde=borde_fino)
+
+    ws.row_dimensions[5].height = 6
+
+    # ── FILA 6: ENCABEZADO TABLA ──
+    ws.merge_cells("A6:J6")
+    estilo(ws, "A6", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
+           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+    ws.row_dimensions[6].height = 22
+
+    # ── FILA 7: SUBENCABEZADOS TABLA ──
+    cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie\nMedidor", "Vol.\nCiclico",
+                  "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m3)", "Estado"]
+    for i, h in enumerate(cols_tabla):
+        c = ws.cell(row=7, column=i+1)
+        estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
+               color_fondo=ROJO, borde=borde_fino)
+    ws.row_dimensions[7].height = 30
+
+    # ── FILAS DE DATOS ──
+    for idx, datos in enumerate(tabla):
+        fila = 8 + idx
+        color_fila = GRIS if idx % 2 == 0 else BLANCO
+        valores = [
+            idx+1, datos["marca"], datos["modelo"], datos["serie_medidor"],
             datos["volumen_ciclico"], "Circular", "Verde",
-            datos["serie_precinto"], f"{datos['registro']} {datos['unidad']}"
+            datos["serie_precinto"] or "N/D",
+            f"{datos['registro']} {datos['unidad']}", "OK"
         ]
-        fill = PatternFill("solid", fgColor=gris_claro) if fila_idx % 2 == 0 else None
-        for col_idx, valor in enumerate(fila, 1):
-            c = ws.cell(row=fila_idx, column=col_idx)
-            c.value = valor
-            c.alignment = Alignment(horizontal="center", vertical="center")
-            c.border = borde
-            if fill:
-                c.fill = fill
+        for col, val in enumerate(valores, 1):
+            c = ws.cell(row=fila, column=col)
+            color = VERDE_CLARO if col == 10 else color_fila
+            estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
+        ws.row_dimensions[fila].height = 16
 
-    # Firma
-    firma_fila = len(tabla) + 6
-    ws.merge_cells(f"A{firma_fila}:H{firma_fila}")
-    c = ws[f"A{firma_fila}"]
-    c.value = f"Certifico que el proceso fue supervisado correctamente — {operario} — {fecha}"
-    c.font = Font(bold=True, italic=True, size=10, color=azul_oscuro)
-    c.alignment = Alignment(horizontal="center", vertical="center")
-    c.fill = PatternFill("solid", fgColor=azul_claro)
-    c.border = borde
-    ws.row_dimensions[firma_fila].height = 20
+    # ── PANEL DETALLES DEL LOTE (columnas K-P) ──
+    ws.merge_cells("K6:P6")
+    estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
+           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
-    # Anchos columnas datos
-    anchos = [12, 10, 15, 16, 12, 10, 15, 16]
-    for i, ancho in enumerate(anchos, 1):
-        ws.column_dimensions[get_column_letter(i)].width = ancho
+    detalles = [
+        ("Lote:", lote),
+        ("Fecha y hora:", fecha),
+        ("Operario:", operario),
+        ("Marca:", tabla[0]["marca"] if tabla else ""),
+        ("Modelo:", tabla[0]["modelo"] if tabla else ""),
+        ("Tipo:", "Circular"),
+        ("Vol. Ciclico:", "0.7 dm3 (fijo)"),
+        ("Color:", "Verde"),
+        ("Total medidores:", str(total)),
+        ("Supervisados:", f"{correctos} (100%)"),
+    ]
 
-    # ─── IMÁGENES EN FILA HORIZONTAL ───
-    IMG_ANCHO = 100
-    IMG_ALTO = 80
-    total = len(fotos_bytes)
+    for i, (clave, valor) in enumerate(detalles):
+        fila_d = 7 + i
+        ws.merge_cells(f"K{fila_d}:L{fila_d}")
+        estilo(ws, f"K{fila_d}", clave, negrita=True, tam=8,
+               color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
+        ws.merge_cells(f"M{fila_d}:P{fila_d}")
+        estilo(ws, f"M{fila_d}", valor, tam=8,
+               color_fondo=BLANCO, borde=borde_fino, alineacion="left")
+        ws.row_dimensions[fila_d].height = 16
 
-    # Ajustar ancho de columnas para imágenes
-    for i in range(1, total + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 15
+    # Certificación en panel
+    cert_fila = 7 + len(detalles) + 1
+    ws.merge_cells(f"K{cert_fila}:P{cert_fila+2}")
+    estilo(ws, f"K{cert_fila}",
+           f"Certifico que el proceso fue supervisado correctamente\n— {operario} —\n{fecha}",
+           negrita=True, italica=True, tam=8,
+           color_fondo=VERDE_CLARO, borde=borde_medio, alineacion="center")
+    ws.row_dimensions[cert_fila].height = 18
+    ws.row_dimensions[cert_fila+1].height = 18
+    ws.row_dimensions[cert_fila+2].height = 18
 
-    img_inicio_fila = firma_fila + 3
+    # ── ESTADÍSTICAS ──
+    est_fila = cert_fila + 4
+    ws.merge_cells(f"K{est_fila}:P{est_fila}")
+    estilo(ws, f"K{est_fila}", "ESTADISTICAS DEL LOTE", negrita=True, tam=10,
+           color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
+    ws.row_dimensions[est_fila].height = 20
 
-    # Título sección imágenes
-    ws.merge_cells(f"A{img_inicio_fila}:{get_column_letter(max(total,1))}{img_inicio_fila}")
-    c = ws[f"A{img_inicio_fila}"]
-    c.value = "EVIDENCIA FOTOGRAFICA DE MEDIDORES"
-    c.font = Font(bold=True, color=blanco, size=12)
-    c.fill = PatternFill("solid", fgColor=azul_oscuro)
-    c.alignment = Alignment(horizontal="center", vertical="center")
-    c.border = borde
-    ws.row_dimensions[img_inicio_fila].height = 24
+    stats = [
+        ("Correctos", correctos, VERDE_CLARO),
+        ("Observados", observados, AMARILLO),
+        ("Rechazados", rechazados, "FADBD8"),
+    ]
+    for i, (nombre, valor, color) in enumerate(stats):
+        fr = est_fila + 1 + i
+        ws.merge_cells(f"K{fr}:M{fr}")
+        estilo(ws, f"K{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
+        ws.merge_cells(f"N{fr}:P{fr}")
+        pct = f"{valor} ({int(valor/total*100) if total else 0}%)"
+        estilo(ws, f"N{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
+        ws.row_dimensions[fr].height = 16
 
-    # Fila de números
-    fila_num = img_inicio_fila + 1
-    for idx in range(total):
-        c = ws.cell(row=fila_num, column=idx + 1)
-        c.value = f"#{idx+1}"
-        c.font = Font(bold=True, color=blanco, size=10)
-        c.fill = PatternFill("solid", fgColor=rojo)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = borde
-    ws.row_dimensions[fila_num].height = 16
+    # ── OBSERVACIONES ──
+    obs_fila = est_fila + 5
+    ws.merge_cells(f"K{obs_fila}:P{obs_fila}")
+    estilo(ws, f"K{obs_fila}", "OBSERVACIONES", negrita=True, tam=10,
+           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+    ws.merge_cells(f"K{obs_fila+1}:P{obs_fila+3}")
+    estilo(ws, f"K{obs_fila+1}", "Sin observaciones.", tam=9,
+           color_fondo=GRIS, borde=borde_fino, alineacion="left")
+    ws.row_dimensions[obs_fila].height = 20
+    for r in range(obs_fila+1, obs_fila+4):
+        ws.row_dimensions[r].height = 14
 
-    # Fila de imágenes
-    fila_img = fila_num + 1
-    ws.row_dimensions[fila_img].height = 65
+    # ── NORMA Y CONDICIONES ──
+    norma_fila = max(8 + total + 2, obs_fila + 5)
+    ws.merge_cells(f"A{norma_fila}:D{norma_fila}")
+    estilo(ws, f"A{norma_fila}", "Norma aplicada: NTC 6031 / OIML R137",
+           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
+    ws.merge_cells(f"E{norma_fila}:H{norma_fila}")
+    estilo(ws, f"E{norma_fila}", "Condiciones ambientales: 25°C / 60% HR",
+           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
+    ws.merge_cells(f"I{norma_fila}:J{norma_fila}")
+    peru = timezone(timedelta(hours=-5))
+    prox = datetime.now(peru).replace(year=datetime.now(peru).year + 1).strftime("%d/%m/%Y")
+    estilo(ws, f"I{norma_fila}", f"Proxima calibracion: {prox}",
+           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
+    ws.row_dimensions[norma_fila].height = 18
 
-    for idx, (foto_bytes, datos) in enumerate(zip(fotos_bytes, tabla)):
-        col = idx + 1
+    # ── EVIDENCIA FOTOGRÁFICA ──
+    foto_fila = norma_fila + 3
+    ws.merge_cells(f"A{foto_fila}:J{foto_fila}")
+    estilo(ws, f"A{foto_fila}", "EVIDENCIA FOTOGRAFICA DEL LOTE", negrita=True, tam=12,
+           color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
+    ws.row_dimensions[foto_fila].height = 24
+
+    IMG_ANCHO = 110
+    IMG_ALTO = 85
+    COLS_FOTO = 6
+
+    for idx, (fb, datos) in enumerate(zip(fotos_bytes, tabla)):
+        fila_bloque = idx // COLS_FOTO
+        col_bloque = idx % COLS_FOTO
+        fi = foto_fila + 1 + fila_bloque * 8
+        col = col_bloque + 1
+
+        ws.row_dimensions[fi].height = 65
+        ws.row_dimensions[fi + 6].height = 16
+
+        # Número encima
+        c_num = ws.cell(row=fi, column=col)
+        c_num.value = str(idx+1)
+        c_num.font = Font(bold=True, size=9, color=BLANCO)
+        c_num.fill = PatternFill("solid", fgColor=VERDE)
+        c_num.alignment = Alignment(horizontal="center", vertical="top")
+        c_num.border = borde_fino
+
+        # Serie debajo
+        c_ser = ws.cell(row=fi+6, column=col)
+        c_ser.value = datos["serie_medidor"]
+        c_ser.font = Font(bold=True, size=8, color=VERDE)
+        c_ser.fill = PatternFill("solid", fgColor=VERDE_CLARO)
+        c_ser.alignment = Alignment(horizontal="center", vertical="center")
+        c_ser.border = borde_fino
+
         try:
-            img = PIL.Image.open(io.BytesIO(foto_bytes))
+            img = PIL.Image.open(io.BytesIO(fb))
             img.thumbnail((IMG_ANCHO, IMG_ALTO))
-            img_buffer = io.BytesIO()
-            img.save(img_buffer, format="PNG")
-            img_buffer.seek(0)
-            xl_img = XLImage(img_buffer)
+            ib = io.BytesIO()
+            img.save(ib, format="PNG")
+            ib.seek(0)
+            xl_img = XLImage(ib)
             xl_img.width = IMG_ANCHO
             xl_img.height = IMG_ALTO
-            ws.add_image(xl_img, f"{get_column_letter(col)}{fila_img}")
+            ws.add_image(xl_img, f"{get_column_letter(col)}{fi}")
         except Exception:
-            ws.cell(row=fila_img, column=col).value = "N/D"
-
-        # Borde alrededor de imagen
-        ws.cell(row=fila_img, column=col).border = borde_medio
-
-    # Fila de series debajo de imágenes
-    fila_serie = fila_img + 5
-    for idx, datos in enumerate(tabla):
-        c = ws.cell(row=fila_serie, column=idx + 1)
-        c.value = datos["serie_medidor"]
-        c.font = Font(bold=True, size=8, color=azul_oscuro)
-        c.fill = PatternFill("solid", fgColor=azul_claro)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = borde
-    ws.row_dimensions[fila_serie].height = 16
+            ws.cell(row=fi, column=col).value = "N/D"
 
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -250,7 +342,8 @@ st.markdown("---")
 operario = st.selectbox("Selecciona el operario:", OPERARIOS)
 peru = timezone(timedelta(hours=-5))
 fecha = datetime.now(peru).strftime("%d/%m/%Y %H:%M")
-st.info(f"Fecha y hora: {fecha}")
+lote = f"L-{datetime.now(peru).strftime('%Y%m%d')}-01"
+st.info(f"Fecha y hora: {fecha} | Lote: {lote}")
 
 st.markdown("---")
 fotos = st.file_uploader(
@@ -268,6 +361,7 @@ if fotos:
         st.session_state.procesado = False
         st.session_state.operario_guardado = operario
         st.session_state.fecha_guardada = fecha
+        st.session_state.lote_guardado = lote
 
         progress = st.progress(0)
         status = st.empty()
@@ -297,6 +391,7 @@ if st.session_state.procesado and st.session_state.tabla:
     fotos_bytes = st.session_state.fotos_bytes
     operario = st.session_state.operario_guardado
     fecha = st.session_state.fecha_guardada
+    lote = st.session_state.lote_guardado
 
     st.markdown("---")
     st.subheader("Tabla completa del lote")
@@ -314,8 +409,8 @@ if st.session_state.procesado and st.session_state.tabla:
     confirmado = st.checkbox(f"Confirmo que el proceso fue supervisado correctamente por {operario}")
 
     if confirmado:
-        nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}.xlsx"
-        excel = generar_excel(tabla, fotos_bytes, operario, fecha)
+        nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}_{lote}.xlsx"
+        excel = generar_excel(tabla, fotos_bytes, operario, fecha, lote)
 
         st.download_button(
             label="📥 Descargar Excel",
