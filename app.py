@@ -77,7 +77,10 @@ def procesar_imagen(imagen):
 
 def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
            color_fondo=None, alineacion="center", borde=None, alto=None, italica=False):
-    c = ws[celda] if isinstance(celda, str) else celda
+    try:
+        c = ws[celda] if isinstance(celda, str) else celda
+    except Exception:
+        c = celda
     c.value = valor
     c.font = Font(bold=negrita, size=tam, color=color_texto, italic=italica)
     c.alignment = Alignment(horizontal=alineacion, vertical="center", wrap_text=True)
