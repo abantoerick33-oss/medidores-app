@@ -153,20 +153,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
 
     ws.row_dimensions[4].height = 6
 
-    # FILAS 5-6: TARJETAS EJECUTIVAS
+    # FILAS 5-6: TARJETAS EJECUTIVAS V2
     marca_tarjeta = (tabla[0].get("marca") or "METREX") if tabla else "-"
     modelo_tarjeta = (tabla[0].get("modelo") or "G1.6") if tabla else "-"
-    serie_inicio = tabla[0]["serie_medidor"] if tabla else "-"
-    serie_fin = tabla[-1]["serie_medidor"] if tabla else "-"
-    estado = "✔ APROBADO"
+    estado = "APROBADO"
 
     tarjetas = [
-        ("A5", "C6", "TOTAL", str(total), AZUL, AZUL_CLARO),
-        ("D5", "F6", "MARCA", marca_tarjeta, VERDE, VERDE_CLARO),
+        ("A5", "C6", "TOTAL DE\nMEDIDORES", str(total), AZUL, AZUL_CLARO),
+        ("D5", "F6", "MARCA DEL\nLOTE", marca_tarjeta, VERDE, VERDE_CLARO),
         ("G5", "I6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
-        ("J5", "L6", "SERIES", f"{serie_inicio} - {serie_fin}", "AF601A", "FDEBD0"),
-        ("M5", "N6", "ESTADO", estado, VERDE, VERDE_CLARO),
-        ("O5", "P6", "REGISTROS", str(total), AZUL, AZUL_CLARO),
+        ("J5", "L6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
+        ("M5", "P6", "MEDIDORES\nREGISTRADOS", str(total), AZUL, AZUL_CLARO),
     ]
 
     for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
