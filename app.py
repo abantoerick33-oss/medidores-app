@@ -183,7 +183,7 @@ for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
             wrap_text=True
         )
 
-    for r in [5, 6]:
+for r in [5, 6]:
         ws.row_dimensions[r].height = 28
 
     ws.row_dimensions[7].height = 6
