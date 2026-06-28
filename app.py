@@ -173,18 +173,18 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
         ("O5", "P6", "REGISTROS", str(total), AZUL, AZUL_CLARO),
     ]
 
-    for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
-        col_inicio = inicio[0]
-        col_fin = fin[0]
-        fila_titulo = inicio[1:]
-        fila_valor = fin[1:]
-        ws.merge_cells(f"{col_inicio}{fila_titulo}:{col_fin}{fila_titulo}")
-        ws.merge_cells(f"{col_inicio}{fila_valor}:{col_fin}{fila_valor}")
-        estilo(ws, inicio, titulo, negrita=True, tam=9,
-               color_texto=BLANCO, color_fondo=color_t, borde=borde_fino)
-        celda_val = f"{col_inicio}{fila_valor}"
-        estilo(ws, celda_val, valor, negrita=True, tam=12,
-               color_fondo=color_v, borde=borde_fino)
+for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
+        ws.merge_cells(f"{inicio}:{fin}")
+        estilo(ws, inicio, f"{titulo}\n\n{valor}",
+               negrita=True, tam=11, color_fondo=color_v, borde=borde_medio)
+        ws[inicio].alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True
+        )
+
+    for r in [5, 6]:
+        ws.row_dimensions[r].height = 28
 
     ws.row_dimensions[7].height = 6
 
