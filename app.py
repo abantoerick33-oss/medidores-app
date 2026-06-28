@@ -210,7 +210,7 @@ ws.merge_cells("K6:P6")
 estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
 color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
-    detalles = [
+detalles = [
         ("Lote:", lote),
         ("Fecha y hora:", fecha),
         ("Operario:", operario),
