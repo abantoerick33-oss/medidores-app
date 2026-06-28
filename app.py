@@ -96,7 +96,6 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     ws = wb.active
     ws.title = "Registro"
 
-    # PALETA DE COLORES
     AZUL = "17375E"
     AZUL_CLARO = "D9EAF7"
     VERDE = "2E8B57"
@@ -122,7 +121,6 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     observados = 0
     rechazados = 0
 
-    # ANCHO DE COLUMNAS
     anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 5, 14, 5, 12, 8, 18]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
@@ -153,55 +151,69 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[3].height = 22
 
-    # FILAS 4-5: TARJETAS DE RESUMEN
-    ws.row_dimensions[4].height = 18
-    ws.row_dimensions[5].height = 28
+    # FILA 4: ESPACIO
+    ws.row_dimensions[4].height = 6
+
+    # FILAS 5-6: TARJETAS EJECUTIVAS
+    ws.row_dimensions[5].height = 18
+    ws.row_dimensions[6].height = 28
+
+    marca_tarjeta = (tabla[0].get("marca") or "METREX") if tabla else "-"
+    modelo_tarjeta = (tabla[0].get("modelo") or "G1.6") if tabla else "-"
+    serie_inicio = tabla[0]["serie_medidor"] if tabla else "-"
+    serie_fin = tabla[-1]["serie_medidor"] if tabla else "-"
+    estado = "✔ APROBADO"
 
     tarjetas = [
-        ("A4", "B5", "Total de medidores", str(total), AZUL, AZUL_CLARO),
-        ("C4", "D5", "Supervisados", f"{correctos} (100%)", VERDE, VERDE_CLARO),
-        ("E4", "F5", "Vol. Cíclico", "0.7 dm³ (fijo)", "7D3C98", "F4ECF7"),
-        ("G4", "H5", "Color registrado", "Verde", VERDE, VERDE_CLARO),
-        ("I4", "J5", "Total registros", str(total), NARANJA, AMARILLO),
+        ("A5", "C6", "TOTAL", str(total), AZUL, AZUL_CLARO),
+        ("D5", "F6", "MARCA", marca_tarjeta, VERDE, VERDE_CLARO),
+        ("G5", "I6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
+        ("J5", "L6", "SERIES", f"{serie_inicio} - {serie_fin}", "AF601A", "FDEBD0"),
+        ("M5", "N6", "ESTADO", estado, VERDE, VERDE_CLARO),
+        ("O5", "P6", "REGISTROS", str(total), AZUL, AZUL_CLARO),
     ]
 
     for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
-        ws.merge_cells(f"{inicio}:{chr(ord(inicio[0]))}{fin[-1]}")
-        ws.merge_cells(f"{inicio[0]}{int(inicio[1])+1}:{fin}")
-        estilo(ws, inicio, titulo, negrita=True, tam=8,
+        col_inicio = inicio[0]
+        col_fin = fin[0]
+        fila_titulo = inicio[1:]
+        fila_valor = fin[1:]
+        ws.merge_cells(f"{col_inicio}{fila_titulo}:{col_fin}{fila_titulo}")
+        ws.merge_cells(f"{col_inicio}{fila_valor}:{col_fin}{fila_valor}")
+        estilo(ws, inicio, titulo, negrita=True, tam=9,
                color_texto=BLANCO, color_fondo=color_t, borde=borde_fino)
-        celda_val = f"{inicio[0]}{int(inicio[1])+1}"
-        estilo(ws, celda_val, valor, negrita=True, tam=13,
+        celda_val = f"{col_inicio}{fila_valor}"
+        estilo(ws, celda_val, valor, negrita=True, tam=12,
                color_fondo=color_v, borde=borde_fino)
 
-    ws.row_dimensions[6].height = 6
+    ws.row_dimensions[7].height = 6
 
-    # FILA 7: ENCABEZADO TABLA
-    ws.merge_cells("A7:J7")
-    estilo(ws, "A7", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
+    # FILA 8: ENCABEZADO TABLA
+    ws.merge_cells("A8:J8")
+    estilo(ws, "A8", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
-    ws.row_dimensions[7].height = 22
+    ws.row_dimensions[8].height = 22
 
-    # FILA 8: SUBENCABEZADOS TABLA
+    # FILA 9: SUBENCABEZADOS TABLA
     cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie\nMedidor", "Vol.\nCíclico",
                   "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m³)", "Estado"]
     for i, h in enumerate(cols_tabla):
-        c = ws.cell(row=8, column=i+1)
+        c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    ws.row_dimensions[8].height = 30
+    ws.row_dimensions[9].height = 30
 
-# Modelo por defecto cuando la IA no lo detecta
+    # FILAS DE DATOS (desde fila 10)
     MODELO_DEFAULT = "G1.6"
     MARCA_DEFAULT = "METREX"
 
     for idx, datos in enumerate(tabla):
-        fila = 9 + idx
+        fila = 10 + idx
         color_fila = GRIS if idx % 2 == 0 else BLANCO
         vol_normalizado = "0.7 dm³"
         unidad_normalizada = "m³"
-        marca = datos["marca"] or MARCA_DEFAULT
-        modelo = datos["modelo"] or MODELO_DEFAULT
+        marca = datos.get("marca") or MARCA_DEFAULT
+        modelo = datos.get("modelo") or MODELO_DEFAULT
         valores = [
             idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
@@ -214,17 +226,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fila].height = 16
 
-    # PANEL DETALLES DEL LOTE (columnas K-P, desde fila 7)
-    ws.merge_cells("K7:P7")
-    estilo(ws, "K7", "DETALLES DEL LOTE", negrita=True, tam=11,
+    # PANEL DETALLES (columnas K-P, desde fila 8)
+    ws.merge_cells("K8:P8")
+    estilo(ws, "K8", "DETALLES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
     detalles = [
         ("Lote:", lote),
         ("Fecha y hora:", fecha),
         ("Operario:", operario),
-        ("Marca:", tabla[0]["marca"] if tabla else ""),
-        ("Modelo:", tabla[0]["modelo"] if tabla else ""),
+        ("Marca:", marca_tarjeta),
+        ("Modelo:", modelo_tarjeta),
         ("Tipo:", "Circular"),
         ("Vol. Cíclico:", "0.7 dm³ (fijo)"),
         ("Color:", "Verde"),
@@ -233,7 +245,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     ]
 
     for i, (clave, valor) in enumerate(detalles):
-        fila_d = 8 + i
+        fila_d = 9 + i
         ws.merge_cells(f"K{fila_d}:L{fila_d}")
         estilo(ws, f"K{fila_d}", clave, negrita=True, tam=8,
                color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
@@ -242,8 +254,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
                color_fondo=BLANCO, borde=borde_fino, alineacion="left")
         ws.row_dimensions[fila_d].height = 16
 
-    # CERTIFICACIÓN
-    cert_fila = 8 + len(detalles) + 1
+    cert_fila = 9 + len(detalles) + 1
     ws.merge_cells(f"K{cert_fila}:P{cert_fila+2}")
     estilo(ws, f"K{cert_fila}",
            f"Certifico que el proceso fue supervisado correctamente\n— {operario} —\n{fecha}",
@@ -286,8 +297,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     for r in range(obs_fila+1, obs_fila+4):
         ws.row_dimensions[r].height = 14
 
-    # EVIDENCIA FOTOGRÁFICA (debajo de la tabla)
-    foto_fila = 9 + total + 2
+    # EVIDENCIA FOTOGRÁFICA
+    foto_fila = 10 + total + 2
     ws.merge_cells(f"A{foto_fila}:J{foto_fila}")
     estilo(ws, f"A{foto_fila}", "EVIDENCIA FOTOGRÁFICA DEL LOTE", negrita=True, tam=12,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
