@@ -191,14 +191,19 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
                color_fondo=ROJO, borde=borde_fino)
     ws.row_dimensions[8].height = 30
 
-    # FILAS DE DATOS (desde fila 9)
+# Modelo por defecto cuando la IA no lo detecta
+    MODELO_DEFAULT = "G1.6"
+    MARCA_DEFAULT = "METREX"
+
     for idx, datos in enumerate(tabla):
         fila = 9 + idx
         color_fila = GRIS if idx % 2 == 0 else BLANCO
         vol_normalizado = "0.7 dm³"
         unidad_normalizada = "m³"
+        marca = datos["marca"] or MARCA_DEFAULT
+        modelo = datos["modelo"] or MODELO_DEFAULT
         valores = [
-            idx+1, datos["marca"], datos["modelo"], datos["serie_medidor"],
+            idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
             f"{datos['registro']} {unidad_normalizada}", "OK"
