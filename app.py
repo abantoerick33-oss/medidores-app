@@ -187,14 +187,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     ws.row_dimensions[7].height = 30
 
     # ── FILAS DE DATOS ──
-    for idx, datos in enumerate(tabla):
+for idx, datos in enumerate(tabla):
         fila = 8 + idx
         color_fila = GRIS if idx % 2 == 0 else BLANCO
+        # Normalizar valores
+        vol_normalizado = "0.7 dm3"
+        unidad_normalizada = "m3"
         valores = [
             idx+1, datos["marca"], datos["modelo"], datos["serie_medidor"],
-            datos["volumen_ciclico"], "Circular", "Verde",
+            vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
-            f"{datos['registro']} {datos['unidad']}", "OK"
+            f"{datos['registro']} {unidad_normalizada}", "OK"
         ]
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
@@ -289,8 +292,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
            tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
     ws.row_dimensions[norma_fila].height = 18
 
-    # ── EVIDENCIA FOTOGRÁFICA ──
-    foto_fila = norma_fila + 3
+ # ── EVIDENCIA FOTOGRÁFICA (debajo de la tabla, lado izquierdo) ──
+    foto_fila = 8 + len(tabla) + 2  # Justo después de la última fila de datos
     ws.merge_cells(f"A{foto_fila}:J{foto_fila}")
     estilo(ws, f"A{foto_fila}", "EVIDENCIA FOTOGRAFICA DEL LOTE", negrita=True, tam=12,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
