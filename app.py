@@ -151,13 +151,9 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[3].height = 22
 
-    # FILA 4: ESPACIO
     ws.row_dimensions[4].height = 6
 
     # FILAS 5-6: TARJETAS EJECUTIVAS
-    ws.row_dimensions[5].height = 18
-    ws.row_dimensions[6].height = 28
-
     marca_tarjeta = (tabla[0].get("marca") or "METREX") if tabla else "-"
     modelo_tarjeta = (tabla[0].get("modelo") or "G1.6") if tabla else "-"
     serie_inicio = tabla[0]["serie_medidor"] if tabla else "-"
@@ -173,7 +169,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
         ("O5", "P6", "REGISTROS", str(total), AZUL, AZUL_CLARO),
     ]
 
-for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
+    for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
         ws.merge_cells(f"{inicio}:{fin}")
         estilo(ws, inicio, f"{titulo}\n\n{valor}",
                negrita=True, tam=11, color_fondo=color_v, borde=borde_medio)
@@ -183,10 +179,10 @@ for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
             wrap_text=True
         )
 
-for r in [5, 6]:
+    for r in [5, 6]:
         ws.row_dimensions[r].height = 28
 
-        ws.row_dimensions[7].height = 6
+    ws.row_dimensions[7].height = 6
 
     # FILA 8: ENCABEZADO TABLA
     ws.merge_cells("A8:J8")
@@ -203,7 +199,7 @@ for r in [5, 6]:
                color_fondo=ROJO, borde=borde_fino)
     ws.row_dimensions[9].height = 30
 
-    # FILAS DE DATOS (desde fila 10)
+    # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
     MARCA_DEFAULT = "METREX"
 
