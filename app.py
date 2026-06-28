@@ -4,8 +4,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as XLImage
-from openpyxl.chart import PieChart, Reference
-from openpyxl.chart.series import DataPoint
 import PIL.Image
 import json
 import time
@@ -98,7 +96,6 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     ws = wb.active
     ws.title = "Registro"
 
-    # Colores
     AZUL = "1B3A6B"
     VERDE = "1E7A3E"
     ROJO = "C00000"
@@ -123,18 +120,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     observados = 0
     rechazados = 0
 
-    # Anchos de columna
     anchos = [4, 10, 8, 14, 10, 10, 10, 14, 14, 8, 4, 12, 4, 10, 6, 18]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
-    # ── FILA 1: TÍTULO PRINCIPAL ──
+    # TÍTULO
     ws.merge_cells("A1:P1")
-    c = estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
-               negrita=True, tam=16, color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+    estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
+           negrita=True, tam=16, color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[1].height = 36
 
-    # ── FILA 2: INFO OPERARIO / FECHA / LOTE ──
+    # INFO
     ws.merge_cells("A2:D2")
     estilo(ws, "A2", f"Operario:  {operario}", negrita=True, tam=10,
            color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
@@ -148,7 +144,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino, alineacion="center")
     ws.row_dimensions[2].height = 22
 
-    # ── FILA 3-4: TARJETAS DE RESUMEN ──
+    # TARJETAS
     ws.row_dimensions[3].height = 18
     ws.row_dimensions[4].height = 28
 
@@ -171,13 +167,12 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
 
     ws.row_dimensions[5].height = 6
 
-    # ── FILA 6: ENCABEZADO TABLA ──
+    # ENCABEZADO TABLA
     ws.merge_cells("A6:J6")
     estilo(ws, "A6", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[6].height = 22
 
-    # ── FILA 7: SUBENCABEZADOS TABLA ──
     cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie\nMedidor", "Vol.\nCiclico",
                   "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m3)", "Estado"]
     for i, h in enumerate(cols_tabla):
@@ -186,11 +181,10 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
                color_fondo=ROJO, borde=borde_fino)
     ws.row_dimensions[7].height = 30
 
-    # ── FILAS DE DATOS ──
-for idx, datos in enumerate(tabla):
+    # FILAS DE DATOS
+    for idx, datos in enumerate(tabla):
         fila = 8 + idx
         color_fila = GRIS if idx % 2 == 0 else BLANCO
-        # Normalizar valores
         vol_normalizado = "0.7 dm3"
         unidad_normalizada = "m3"
         valores = [
@@ -205,12 +199,12 @@ for idx, datos in enumerate(tabla):
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fila].height = 16
 
-    # ── PANEL DETALLES DEL LOTE (columnas K-P) ──
-ws.merge_cells("K6:P6")
-estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
-color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+    # PANEL DETALLES
+    ws.merge_cells("K6:P6")
+    estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
+           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
-detalles = [
+    detalles = [
         ("Lote:", lote),
         ("Fecha y hora:", fecha),
         ("Operario:", operario),
@@ -233,7 +227,6 @@ detalles = [
                color_fondo=BLANCO, borde=borde_fino, alineacion="left")
         ws.row_dimensions[fila_d].height = 16
 
-    # Certificación en panel
     cert_fila = 7 + len(detalles) + 1
     ws.merge_cells(f"K{cert_fila}:P{cert_fila+2}")
     estilo(ws, f"K{cert_fila}",
@@ -244,7 +237,6 @@ detalles = [
     ws.row_dimensions[cert_fila+1].height = 18
     ws.row_dimensions[cert_fila+2].height = 18
 
-    # ── ESTADÍSTICAS ──
     est_fila = cert_fila + 4
     ws.merge_cells(f"K{est_fila}:P{est_fila}")
     estilo(ws, f"K{est_fila}", "ESTADISTICAS DEL LOTE", negrita=True, tam=10,
@@ -265,7 +257,6 @@ detalles = [
         estilo(ws, f"N{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fr].height = 16
 
-    # ── OBSERVACIONES ──
     obs_fila = est_fila + 5
     ws.merge_cells(f"K{obs_fila}:P{obs_fila}")
     estilo(ws, f"K{obs_fila}", "OBSERVACIONES", negrita=True, tam=10,
@@ -277,23 +268,8 @@ detalles = [
     for r in range(obs_fila+1, obs_fila+4):
         ws.row_dimensions[r].height = 14
 
-    # ── NORMA Y CONDICIONES ──
-    norma_fila = max(8 + total + 2, obs_fila + 5)
-    ws.merge_cells(f"A{norma_fila}:D{norma_fila}")
-    estilo(ws, f"A{norma_fila}", "Norma aplicada: NTC 6031 / OIML R137",
-           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-    ws.merge_cells(f"E{norma_fila}:H{norma_fila}")
-    estilo(ws, f"E{norma_fila}", "Condiciones ambientales: 25°C / 60% HR",
-           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
-    ws.merge_cells(f"I{norma_fila}:J{norma_fila}")
-    peru = timezone(timedelta(hours=-5))
-    prox = datetime.now(peru).replace(year=datetime.now(peru).year + 1).strftime("%d/%m/%Y")
-    estilo(ws, f"I{norma_fila}", f"Proxima calibracion: {prox}",
-           tam=8, color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="center")
-    ws.row_dimensions[norma_fila].height = 18
-
- # ── EVIDENCIA FOTOGRÁFICA (debajo de la tabla, lado izquierdo) ──
-    foto_fila = 8 + len(tabla) + 2  # Justo después de la última fila de datos
+    # EVIDENCIA FOTOGRÁFICA (debajo de la tabla)
+    foto_fila = 8 + total + 2
     ws.merge_cells(f"A{foto_fila}:J{foto_fila}")
     estilo(ws, f"A{foto_fila}", "EVIDENCIA FOTOGRAFICA DEL LOTE", negrita=True, tam=12,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
@@ -312,7 +288,6 @@ detalles = [
         ws.row_dimensions[fi].height = 65
         ws.row_dimensions[fi + 6].height = 16
 
-        # Número encima
         c_num = ws.cell(row=fi, column=col)
         c_num.value = str(idx+1)
         c_num.font = Font(bold=True, size=9, color=BLANCO)
@@ -320,7 +295,6 @@ detalles = [
         c_num.alignment = Alignment(horizontal="center", vertical="top")
         c_num.border = borde_fino
 
-        # Serie debajo
         c_ser = ws.cell(row=fi+6, column=col)
         c_ser.value = datos["serie_medidor"]
         c_ser.font = Font(bold=True, size=8, color=VERDE)
@@ -346,7 +320,7 @@ detalles = [
     buffer.seek(0)
     return buffer
 
-# ─── INTERFAZ ───
+# INTERFAZ
 st.markdown("---")
 operario = st.selectbox("Selecciona el operario:", OPERARIOS)
 peru = timezone(timedelta(hours=-5))
