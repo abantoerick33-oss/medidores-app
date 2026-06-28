@@ -206,9 +206,9 @@ for idx, datos in enumerate(tabla):
         ws.row_dimensions[fila].height = 16
 
     # ── PANEL DETALLES DEL LOTE (columnas K-P) ──
-    ws.merge_cells("K6:P6")
-    estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
-           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
+ws.merge_cells("K6:P6")
+estilo(ws, "K6", "DETALLES DEL LOTE", negrita=True, tam=11,
+color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
     detalles = [
         ("Lote:", lote),
