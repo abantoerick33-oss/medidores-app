@@ -185,8 +185,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     for idx, datos in enumerate(tabla):
         fila = 8 + idx
         color_fila = GRIS if idx % 2 == 0 else BLANCO
-        vol_normalizado = "0.7 dm3"
-        unidad_normalizada = "m3"
+        vol_normalizado = "0.7 dm³"
+        unidad_normalizada = "m³"
         valores = [
             idx+1, datos["marca"], datos["modelo"], datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
