@@ -251,7 +251,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
             datos["serie_precinto"] or "N/D",
             f"{datos['registro']} {unidad_normalizada}", "", obs
         ]
-    for col, val in enumerate(valores, 1):
+        for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
             color = color_fila
             if col == 11 and obs != "NINGUNA":
@@ -410,7 +410,7 @@ if fotos:
 
             if datos:
                 st.session_state.tabla.append(datos)
-                st.session_state.observaciones_lote.append("")  # vacío inicial
+                st.session_state.observaciones_lote.append("")
                 st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
                 st.error(f"No se pudo procesar el medidor {i+1}")
@@ -432,7 +432,6 @@ if st.session_state.procesado and st.session_state.tabla:
     st.subheader(f"Lote: {lote}")
     st.subheader("Tabla completa del lote")
 
-    # Tabla editable con observaciones
     st.markdown("**Selecciona una observación para cada medidor:**")
 
     for i, d in enumerate(tabla):
@@ -451,7 +450,6 @@ if st.session_state.procesado and st.session_state.tabla:
 
     st.markdown("---")
 
-    # Validar que todas las observaciones estén llenas
     todas_llenas = all(obs != "" for obs in st.session_state.observaciones_lote)
     if not todas_llenas:
         st.warning("⚠️ Debes seleccionar una observación para cada medidor antes de continuar.")
