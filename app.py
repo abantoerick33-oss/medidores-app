@@ -123,7 +123,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     observados = 0
     rechazados = 0
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 5, 14, 5, 12, 8, 18]
+    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
@@ -191,7 +191,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    ws.row_dimensions[9].height = 25.8
+    ws.row_dimensions[9].height = 26.4
 
     # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
