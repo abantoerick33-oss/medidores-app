@@ -163,7 +163,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     total = len(tabla)
     correctos = total
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 33, 5, 14, 5, 12, 8, 2.11]
+    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 35, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
