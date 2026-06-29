@@ -191,8 +191,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    from openpyxl.worksheet.dimensions import RowDimension
-    ws.row_dimensions[9] = RowDimension(ws, index=9, ht=35, customHeight=True)
+    ws.row_dimensions[9].height = 35
     
     # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
