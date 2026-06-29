@@ -159,11 +159,10 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     estado = "APROBADO"
 
     tarjetas = [
-        ("A5", "C6", "TOTAL DE\nMEDIDORES", str(total), AZUL, AZUL_CLARO),
-        ("D5", "F6", "MARCA DEL\nLOTE", marca_tarjeta, VERDE, VERDE_CLARO),
-        ("G5", "I6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
-        ("J5", "L6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
-        ("M5", "P6", "MEDIDORES\nREGISTRADOS", str(total), AZUL, AZUL_CLARO),
+        ("A5", "D6", "TOTAL DE\nMEDIDORES", str(total), AZUL, AZUL_CLARO),
+        ("E5", "H6", "MARCA DEL\nLOTE", marca_tarjeta, VERDE, VERDE_CLARO),
+        ("I5", "L6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
+        ("M5", "P6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
     ]
 
     for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
@@ -194,7 +193,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    ws.row_dimensions[9].height = 30
+    ws.row_dimensions[9].height = 43
 
     # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
