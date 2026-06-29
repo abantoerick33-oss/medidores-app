@@ -23,6 +23,26 @@ API_KEYS = [
 
 OPERARIOS = ["Joseph Erik Abanto Guerra", "Marco David Rodríguez Valencia"]
 
+OBSERVACIONES = [
+    "NINGUNA",
+    "PRESENCIA DE CORROSIÓN SOBRE MEDIDOR",
+    "PRESENCIA DE GOLPE SOBRE MEDIDOR",
+    "PRESENCIA DE CONTAMINANTE SOBRE MEDIDOR",
+    "PRESENCIA DE RAYADURA SOBRE MEDIDOR",
+    "ODÓMETRO SE DETIENE",
+    "ODÓMETRO NO GIRA",
+    "AUSENCIA DE PRECINTO DE SEGURIDAD",
+    "PRECINTO DE SEGURIDAD ROTO",
+    "PRESENCIA DE CONTAMINANTES SOBRE LUNETA",
+    "PRESENCIA DE FISURA SOBRE LUNETA",
+    "PRESENCIA DE RAYADURA SOBRE LUNETA",
+    "PRESENCIA DE CONTAMINANTE SOBRE ROSCA",
+    "PRESENCIA DE CORROSIÓN SOBRE ROSCA",
+    "PRESENCIA DE GOLPE SOBRE ROSCA",
+    "SELLOS DE SEGURIDAD DE ODÓMETRO ROTOS",
+    "AUSENCIA DE TORNILLOS DE SEGURIDAD",
+]
+
 prompt = """Analiza esta imagen de un medidor de gas con extremo detalle. Tu misión es extraer TODOS los datos visibles, especialmente el número del precinto de seguridad.
 Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adicional:
 {
@@ -44,16 +64,14 @@ Instrucciones detalladas:
 - volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm3)
 
 INSTRUCCIONES CRÍTICAS PARA EL PRECINTO:
-El precinto de seguridad es una etiqueta pequeña colgante (generalmente con un broche verde o tapa de color) que cuelga o está pegada al medidor. Es un dato OBLIGATORIO que SIEMPRE debes encontrar.
+El precinto de seguridad es una etiqueta pequeña colgante que cuelga o está pegada al medidor. Es un dato OBLIGATORIO que SIEMPRE debes encontrar.
 
 REGLAS PARA LEER EL PRECINTO:
-1. Busca en TODA la imagen — no solo en una zona. Puede estar arriba, abajo, a los lados, colgando, atado a un perno, o pegado al cuerpo del medidor.
-2. La etiqueta del precinto puede estar en CUALQUIER ÁNGULO: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315° o cualquier rotación intermedia.
-3. ANTES DE RENDIRTE, intenta leer mentalmente rotando la imagen 90°, 180° y 270°. Si ves caracteres como "GUM", "8YL", "MN8", letras invertidas o números al revés, probablemente está rotado y debes corregir la lectura.
-4. El formato OBLIGATORIO siempre es: letra G mayúscula + 7 dígitos numéricos (ejemplos válidos: G0454825, G0457243, G0362185, G0451964, G0451981, G0441802).
-5. Si ves un número que NO empieza con G o no tiene 7 dígitos después de la G, está mal leído — intenta otra vez rotando.
-6. Si la etiqueta tiene texto pero parece ilegible, enfócate en los caracteres alfanuméricos y descarta cualquier texto decorativo como "METREX S.A." o logos.
-7. Si después de intentar TODAS las rotaciones no es claramente visible, solo entonces pon null.
+1. Busca en TODA la imagen — no solo en una zona.
+2. La etiqueta puede estar en CUALQUIER ÁNGULO: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°.
+3. Si ves caracteres como "GUM", "8YL", letras invertidas, intenta leer mentalmente rotando la imagen.
+4. El formato OBLIGATORIO es: letra G mayúscula + 7 dígitos numéricos (ej: G0454825, G0457243).
+5. Si después de TODAS las rotaciones no es claramente visible, solo entonces pon null.
 
 Si no puedes leer algun otro dato, pon null."""
 
@@ -69,6 +87,18 @@ if "fecha_guardada" not in st.session_state:
     st.session_state.fecha_guardada = ""
 if "lote_guardado" not in st.session_state:
     st.session_state.lote_guardado = ""
+if "observaciones_lote" not in st.session_state:
+    st.session_state.observaciones_lote = []
+if "contador_lote_dia" not in st.session_state:
+    st.session_state.contador_lote_dia = {}
+
+def generar_lote(fecha_dt):
+    fecha_clave = fecha_dt.strftime("%Y-%m-%d")
+    if fecha_clave not in st.session_state.contador_lote_dia:
+        st.session_state.contador_lote_dia[fecha_clave] = 0
+    st.session_state.contador_lote_dia[fecha_clave] += 1
+    qv = st.session_state.contador_lote_dia[fecha_clave]
+    return f"QV{qv}-VP-{fecha_clave}"
 
 def procesar_imagen(imagen):
     for key_idx, api_key in enumerate(API_KEYS):
@@ -105,7 +135,7 @@ def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
         c.border = borde
     return c
 
-def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
+def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones):
     wb = Workbook()
     ws = wb.active
     ws.title = "Registro"
@@ -116,7 +146,6 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     VERDE_CLARO = "EAF7EE"
     ROJO = "C0392B"
     GRIS = "F4F6F7"
-    GRIS2 = "D5D8DC"
     BLANCO = "FFFFFF"
     AMARILLO = "FCF3CF"
     NARANJA = "E67E22"
@@ -133,21 +162,19 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
 
     total = len(tabla)
     correctos = total
-    observados = 0
-    rechazados = 0
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 5, 14, 5, 12, 8, 2.11]
+    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 28, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
     # FILA 1: TÍTULO
-    ws.merge_cells("A1:P1")
+    ws.merge_cells("A1:Q1")
     estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
            negrita=True, tam=18, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
     ws.row_dimensions[1].height = 35
 
     # FILA 2: SUBTÍTULO
-    ws.merge_cells("A2:P2")
+    ws.merge_cells("A2:Q2")
     estilo(ws, "A2", "Reporte automático de inspección y registro de medidores",
            tam=10, italica=True, color_texto="404040", color_fondo=GRIS, borde=borde_fino)
     ws.row_dimensions[2].height = 18
@@ -159,14 +186,14 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     ws.merge_cells("E3:J3")
     estilo(ws, "E3", f"📅 Fecha: {fecha}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino)
-    ws.merge_cells("K3:P3")
+    ws.merge_cells("K3:Q3")
     estilo(ws, "K3", f"🏷 Lote: {lote}", negrita=True,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[3].height = 22
 
     ws.row_dimensions[4].height = 6
 
-    # FILAS 5-6: TARJETAS EJECUTIVAS
+    # FILAS 5-6: TARJETAS
     marca_tarjeta = (tabla[0].get("marca") or "METREX") if tabla else "-"
     modelo_tarjeta = (tabla[0].get("modelo") or "G1.6") if tabla else "-"
     estado = "APROBADO"
@@ -175,7 +202,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
         ("A5", "D6", "TOTAL DE\nMEDIDORES", str(total), AZUL, AZUL_CLARO),
         ("E5", "H6", "MARCA DEL\nLOTE", marca_tarjeta, VERDE, VERDE_CLARO),
         ("I5", "L6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
-        ("M5", "P6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
+        ("M5", "Q6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
     ]
 
     for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
@@ -192,20 +219,20 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     ws.row_dimensions[7].height = 6
 
     # FILA 8: ENCABEZADO TABLA
-    ws.merge_cells("A8:J8")
+    ws.merge_cells("A8:K8")
     estilo(ws, "A8", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[8].height = 22
 
     # FILA 9: SUBENCABEZADOS
     cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie Medidor", "Vol. Cíclico",
-                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)", "Foto"]
+                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)", "Foto", "Observación"]
     for i, h in enumerate(cols_tabla):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    ws.row_dimensions[9].height = 35
-    
+    ws.row_dimensions[9].height = 26.4
+
     # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
     MARCA_DEFAULT = "METREX"
@@ -217,17 +244,20 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
         unidad_normalizada = "m³"
         marca = datos.get("marca") or MARCA_DEFAULT
         modelo = datos.get("modelo") or MODELO_DEFAULT
+        obs = observaciones[idx] if idx < len(observaciones) else "NINGUNA"
         valores = [
             idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
-            f"{datos['registro']} {unidad_normalizada}", ""
+            f"{datos['registro']} {unidad_normalizada}", "", obs
         ]
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
             color = color_fila
+            if col == 11 and obs != "NINGUNA":
+                color = "FDEDEC"
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
-        # Hipervínculo a la foto
+        # Hipervínculo
         nombre_img = nombres_imagenes[idx]
         c_link = ws.cell(row=fila, column=10)
         c_link.value = f"📷 Ver foto {idx+1}"
@@ -239,8 +269,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
         ws.row_dimensions[fila].height = 16
 
     # PANEL DETALLES
-    ws.merge_cells("K8:P8")
-    estilo(ws, "K8", "DETALLES DEL LOTE", negrita=True, tam=11,
+    ws.merge_cells("L8:Q8")
+    estilo(ws, "L8", "DETALLES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
     detalles = [
@@ -258,17 +288,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
 
     for i, (clave, valor) in enumerate(detalles):
         fila_d = 9 + i
-        ws.merge_cells(f"K{fila_d}:L{fila_d}")
-        estilo(ws, f"K{fila_d}", clave, negrita=True, tam=8,
+        ws.merge_cells(f"L{fila_d}:M{fila_d}")
+        estilo(ws, f"L{fila_d}", clave, negrita=True, tam=8,
                color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-        ws.merge_cells(f"M{fila_d}:P{fila_d}")
-        estilo(ws, f"M{fila_d}", valor, tam=8,
+        ws.merge_cells(f"N{fila_d}:Q{fila_d}")
+        estilo(ws, f"N{fila_d}", valor, tam=8,
                color_fondo=BLANCO, borde=borde_fino, alineacion="left")
         ws.row_dimensions[fila_d].height = 16
 
     cert_fila = 9 + len(detalles) + 1
-    ws.merge_cells(f"K{cert_fila}:P{cert_fila+2}")
-    estilo(ws, f"K{cert_fila}",
+    ws.merge_cells(f"L{cert_fila}:Q{cert_fila+2}")
+    estilo(ws, f"L{cert_fila}",
            f"Certifico que el proceso fue supervisado correctamente\n— {operario} —\n{fecha}",
            negrita=True, italica=True, tam=8,
            color_fondo=VERDE_CLARO, borde=borde_medio, alineacion="center")
@@ -278,40 +308,30 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
 
     # ESTADÍSTICAS
     est_fila = cert_fila + 4
-    ws.merge_cells(f"K{est_fila}:P{est_fila}")
-    estilo(ws, f"K{est_fila}", "ESTADÍSTICAS DEL LOTE", negrita=True, tam=10,
+    ws.merge_cells(f"L{est_fila}:Q{est_fila}")
+    estilo(ws, f"L{est_fila}", "RESUMEN DE OBSERVACIONES", negrita=True, tam=10,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
     ws.row_dimensions[est_fila].height = 20
 
+    sin_obs = observaciones.count("NINGUNA")
+    con_obs = total - sin_obs
+
     stats = [
-        ("Correctos", correctos, VERDE_CLARO),
-        ("Observados", observados, AMARILLO),
-        ("Rechazados", rechazados, "FADBD8"),
+        ("Sin observación", sin_obs, VERDE_CLARO),
+        ("Con observación", con_obs, AMARILLO),
     ]
     for i, (nombre, valor, color) in enumerate(stats):
         fr = est_fila + 1 + i
-        ws.merge_cells(f"K{fr}:M{fr}")
-        estilo(ws, f"K{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
-        ws.merge_cells(f"N{fr}:P{fr}")
+        ws.merge_cells(f"L{fr}:N{fr}")
+        estilo(ws, f"L{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
+        ws.merge_cells(f"O{fr}:Q{fr}")
         pct = f"{valor} ({int(valor/total*100) if total else 0}%)"
-        estilo(ws, f"N{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
+        estilo(ws, f"O{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fr].height = 16
 
-    # OBSERVACIONES
-    obs_fila = est_fila + 5
-    ws.merge_cells(f"K{obs_fila}:P{obs_fila}")
-    estilo(ws, f"K{obs_fila}", "OBSERVACIONES", negrita=True, tam=10,
-           color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
-    ws.merge_cells(f"K{obs_fila+1}:P{obs_fila+3}")
-    estilo(ws, f"K{obs_fila+1}", "Sin observaciones.", tam=9,
-           color_fondo=GRIS, borde=borde_fino, alineacion="left")
-    ws.row_dimensions[obs_fila].height = 20
-    for r in range(obs_fila+1, obs_fila+4):
-        ws.row_dimensions[r].height = 14
-
-    # INFO SOBRE LAS FOTOS
+    # INFO FOTOS
     info_fila = 10 + total + 2
-    ws.merge_cells(f"A{info_fila}:J{info_fila}")
+    ws.merge_cells(f"A{info_fila}:K{info_fila}")
     estilo(ws, f"A{info_fila}",
            "💡 Las fotos están en la carpeta 'imagenes/'. Haz clic en cada enlace de la columna Foto para abrirlas.",
            tam=10, italica=True, color_texto="404040", color_fondo=AMARILLO, borde=borde_fino)
@@ -322,25 +342,19 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     buffer.seek(0)
     return buffer
 
-def generar_zip(tabla, fotos_bytes, operario, fecha, lote):
-    # Generar nombres de imágenes
+def generar_zip(tabla, fotos_bytes, operario, fecha, lote, observaciones):
     nombres_imagenes = []
     for idx, datos in enumerate(tabla):
         serie = datos.get("serie_medidor", f"med{idx+1}")
         nombre = f"{str(idx+1).zfill(2)}_{serie}.png"
         nombres_imagenes.append(nombre)
 
-    # Generar Excel con referencias a las imágenes
-    excel_buffer = generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes)
+    excel_buffer = generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones)
 
-    # Crear ZIP
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Excel principal
         nombre_excel = f"Reporte_{lote}.xlsx"
         zf.writestr(nombre_excel, excel_buffer.read())
-
-        # Imágenes en la carpeta imagenes/
         for idx, (fb, nombre_img) in enumerate(zip(fotos_bytes, nombres_imagenes)):
             try:
                 img = PIL.Image.open(io.BytesIO(fb))
@@ -358,9 +372,9 @@ def generar_zip(tabla, fotos_bytes, operario, fecha, lote):
 st.markdown("---")
 operario = st.selectbox("Selecciona el operario:", OPERARIOS)
 peru = timezone(timedelta(hours=-5))
-fecha = datetime.now(peru).strftime("%d/%m/%Y %H:%M")
-lote = f"L-{datetime.now(peru).strftime('%Y%m%d')}-01"
-st.info(f"Fecha y hora: {fecha} | Lote: {lote}")
+ahora = datetime.now(peru)
+fecha = ahora.strftime("%d/%m/%Y %H:%M")
+st.info(f"Fecha y hora: {fecha}")
 
 st.markdown("---")
 fotos = st.file_uploader(
@@ -378,7 +392,8 @@ if fotos:
         st.session_state.procesado = False
         st.session_state.operario_guardado = operario
         st.session_state.fecha_guardada = fecha
-        st.session_state.lote_guardado = lote
+        st.session_state.lote_guardado = generar_lote(ahora)
+        st.session_state.observaciones_lote = []
 
         progress = st.progress(0)
         status = st.empty()
@@ -393,6 +408,7 @@ if fotos:
 
             if datos:
                 st.session_state.tabla.append(datos)
+                st.session_state.observaciones_lote.append("")  # vacío inicial
                 st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
                 st.error(f"No se pudo procesar el medidor {i+1}")
@@ -411,23 +427,38 @@ if st.session_state.procesado and st.session_state.tabla:
     lote = st.session_state.lote_guardado
 
     st.markdown("---")
+    st.subheader(f"Lote: {lote}")
     st.subheader("Tabla completa del lote")
-    st.table([{
-        "N": i+1,
-        "Marca": d["marca"],
-        "Modelo": d["modelo"],
-        "Serie": d["serie_medidor"],
-        "Registro": f"{d['registro']} {d['unidad']}",
-        "Vol. Cíclico": d["volumen_ciclico"],
-        "Precinto": d["serie_precinto"]
-    } for i, d in enumerate(tabla)])
+
+    # Tabla editable con observaciones
+    st.markdown("**Selecciona una observación para cada medidor:**")
+
+    for i, d in enumerate(tabla):
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            st.markdown(f"**#{i+1}** — Serie: `{d['serie_medidor']}` | Registro: `{d['registro']} {d['unidad']}`")
+        with col2:
+            seleccion = st.selectbox(
+                f"Observación medidor {i+1}",
+                options=[""] + OBSERVACIONES,
+                key=f"obs_{i}",
+                label_visibility="collapsed"
+            )
+            if i < len(st.session_state.observaciones_lote):
+                st.session_state.observaciones_lote[i] = seleccion
 
     st.markdown("---")
+
+    # Validar que todas las observaciones estén llenas
+    todas_llenas = all(obs != "" for obs in st.session_state.observaciones_lote)
+    if not todas_llenas:
+        st.warning("⚠️ Debes seleccionar una observación para cada medidor antes de continuar.")
+
     confirmado = st.checkbox(f"Confirmo que el proceso fue supervisado correctamente por {operario}")
 
-    if confirmado:
+    if confirmado and todas_llenas:
         nombre_archivo = f"MetriLab_{lote}.zip"
-        zip_file = generar_zip(tabla, fotos_bytes, operario, fecha, lote)
+        zip_file = generar_zip(tabla, fotos_bytes, operario, fecha, lote, st.session_state.observaciones_lote)
 
         st.download_button(
             label="📥 Descargar reporte completo (ZIP)",
@@ -436,5 +467,5 @@ if st.session_state.procesado and st.session_state.tabla:
             mime="application/zip"
         )
         st.info("El ZIP contiene el Excel y la carpeta de imágenes. Descomprime para usar los enlaces.")
-    else:
-        st.warning("Debes confirmar la supervision antes de descargar el reporte.")
+    elif not confirmado:
+        st.warning("Debes confirmar la supervisión antes de descargar el reporte.")
