@@ -163,7 +163,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     total = len(tabla)
     correctos = total
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 28, 5, 14, 5, 12, 8, 2.11]
+    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 33, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
@@ -257,6 +257,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
             if col == 11 and obs != "NINGUNA":
                 color = "FDEDEC"
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
+            if col == 11:
+                c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
         # Hipervínculo
         nombre_img = nombres_imagenes[idx]
         c_link = ws.cell(row=fila, column=10)
