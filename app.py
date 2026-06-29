@@ -23,7 +23,7 @@ API_KEYS = [
 
 OPERARIOS = ["Joseph Erik Abanto Guerra", "Marco David Rodríguez Valencia"]
 
-prompt = """Analiza esta imagen de un medidor de gas con mucho detalle.
+prompt = """Analiza esta imagen de un medidor de gas con extremo detalle. Tu misión es extraer TODOS los datos visibles, especialmente el número del precinto de seguridad.
 Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adicional:
 {
   "marca": "",
@@ -34,15 +34,28 @@ Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adi
   "volumen_ciclico": "",
   "serie_precinto": ""
 }
-Instrucciones:
+
+Instrucciones detalladas:
 - marca: nombre del fabricante (ej: METREX)
 - modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
 - serie_medidor: numero de serie del medidor (ej: 3809043)
 - registro: lectura actual del contador con todos los digitos incluyendo los que estan en rojo, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095). Los digitos en rojo son parte del registro.
 - unidad: unidad de medida del registro (ej: m3)
 - volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm3)
-- serie_precinto: busca con mucho cuidado el numero del precinto de seguridad. Puede ser una etiqueta pequena colgante o pegada al medidor. IMPORTANTE: puede estar rotado o al reves 180 grados. El formato siempre empieza con G seguido de 7 digitos numericos (ej: G0454825, G0457243). Si ves letras como GUM u otras combinaciones raras, intenta leer rotando 180 grados. Si definitivamente no es visible, pon null.
-Si no puedes leer algun dato, pon null."""
+
+INSTRUCCIONES CRÍTICAS PARA EL PRECINTO:
+El precinto de seguridad es una etiqueta pequeña colgante (generalmente con un broche verde o tapa de color) que cuelga o está pegada al medidor. Es un dato OBLIGATORIO que SIEMPRE debes encontrar.
+
+REGLAS PARA LEER EL PRECINTO:
+1. Busca en TODA la imagen — no solo en una zona. Puede estar arriba, abajo, a los lados, colgando, atado a un perno, o pegado al cuerpo del medidor.
+2. La etiqueta del precinto puede estar en CUALQUIER ÁNGULO: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315° o cualquier rotación intermedia.
+3. ANTES DE RENDIRTE, intenta leer mentalmente rotando la imagen 90°, 180° y 270°. Si ves caracteres como "GUM", "8YL", "MN8", letras invertidas o números al revés, probablemente está rotado y debes corregir la lectura.
+4. El formato OBLIGATORIO siempre es: letra G mayúscula + 7 dígitos numéricos (ejemplos válidos: G0454825, G0457243, G0362185, G0451964, G0451981, G0441802).
+5. Si ves un número que NO empieza con G o no tiene 7 dígitos después de la G, está mal leído — intenta otra vez rotando.
+6. Si la etiqueta tiene texto pero parece ilegible, enfócate en los caracteres alfanuméricos y descarta cualquier texto decorativo como "METREX S.A." o logos.
+7. Si después de intentar TODAS las rotaciones no es claramente visible, solo entonces pon null.
+
+Si no puedes leer algun otro dato, pon null."""
 
 if "tabla" not in st.session_state:
     st.session_state.tabla = []
