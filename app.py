@@ -8,11 +8,12 @@ import PIL.Image
 import json
 import time
 import io
+import zipfile
 from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Registro de Medidores", page_icon="📊", layout="centered")
 st.title("📊 Registro de Medidores de Gas")
-st.markdown("Sube hasta 12 fotos de medidores y genera el Excel automáticamente.")
+st.markdown("Sube hasta 12 fotos de medidores y genera el reporte automáticamente.")
 
 API_KEYS = [
     st.secrets["GEMINI_API_KEY_1"],
@@ -91,7 +92,7 @@ def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
         c.border = borde
     return c
 
-def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
+def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     wb = Workbook()
     ws = wb.active
     ws.title = "Registro"
@@ -106,6 +107,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     BLANCO = "FFFFFF"
     AMARILLO = "FCF3CF"
     NARANJA = "E67E22"
+    AZUL_LINK = "1E40AF"
 
     borde_fino = Border(
         left=Side(style='thin'), right=Side(style='thin'),
@@ -125,7 +127,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
-    # FILA 1: TÍTULO PRINCIPAL
+    # FILA 1: TÍTULO
     ws.merge_cells("A1:P1")
     estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
            negrita=True, tam=18, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
@@ -141,11 +143,9 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     ws.merge_cells("A3:D3")
     estilo(ws, "A3", f"👤 Operario: {operario}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-
     ws.merge_cells("E3:J3")
     estilo(ws, "E3", f"📅 Fecha: {fecha}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino)
-
     ws.merge_cells("K3:P3")
     estilo(ws, "K3", f"🏷 Lote: {lote}", negrita=True,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
@@ -153,7 +153,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
 
     ws.row_dimensions[4].height = 6
 
-    # FILAS 5-6: TARJETAS EJECUTIVAS V2
+    # FILAS 5-6: TARJETAS EJECUTIVAS
     marca_tarjeta = (tabla[0].get("marca") or "METREX") if tabla else "-"
     modelo_tarjeta = (tabla[0].get("modelo") or "G1.6") if tabla else "-"
     estado = "APROBADO"
@@ -170,9 +170,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
         estilo(ws, inicio, f"{titulo}\n\n{valor}",
                negrita=True, tam=11, color_fondo=color_v, borde=borde_medio)
         ws[inicio].alignment = Alignment(
-            horizontal="center",
-            vertical="center",
-            wrap_text=True
+            horizontal="center", vertical="center", wrap_text=True
         )
 
     for r in [5, 6]:
@@ -186,14 +184,14 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[8].height = 22
 
-    # FILA 9: SUBENCABEZADOS TABLA
+    # FILA 9: SUBENCABEZADOS
     cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie\nMedidor", "Vol.\nCíclico",
-                  "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m³)", "Estado"]
+                  "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m³)", "Foto"]
     for i, h in enumerate(cols_tabla):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
                color_fondo=ROJO, borde=borde_fino)
-    ws.row_dimensions[9].height = 50
+    ws.row_dimensions[9].height = 25.8
 
     # FILAS DE DATOS
     MODELO_DEFAULT = "G1.6"
@@ -210,15 +208,24 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
             idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
-            f"{datos['registro']} {unidad_normalizada}", "OK"
+            f"{datos['registro']} {unidad_normalizada}", ""
         ]
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
-            color = VERDE_CLARO if col == 10 else color_fila
+            color = color_fila
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
+        # Hipervínculo a la foto
+        nombre_img = nombres_imagenes[idx]
+        c_link = ws.cell(row=fila, column=10)
+        c_link.value = f"📷 Ver foto {idx+1}"
+        c_link.hyperlink = f"imagenes/{nombre_img}"
+        c_link.font = Font(bold=True, size=9, color=AZUL_LINK, underline="single")
+        c_link.alignment = Alignment(horizontal="center", vertical="center")
+        c_link.fill = PatternFill("solid", fgColor=VERDE_CLARO)
+        c_link.border = borde_fino
         ws.row_dimensions[fila].height = 16
 
-    # PANEL DETALLES (columnas K-P, desde fila 8)
+    # PANEL DETALLES
     ws.merge_cells("K8:P8")
     estilo(ws, "K8", "DETALLES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
@@ -289,57 +296,50 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote):
     for r in range(obs_fila+1, obs_fila+4):
         ws.row_dimensions[r].height = 14
 
-    # EVIDENCIA FOTOGRÁFICA
-    foto_fila = 10 + total + 2
-    ws.merge_cells(f"A{foto_fila}:J{foto_fila}")
-    estilo(ws, f"A{foto_fila}", "EVIDENCIA FOTOGRÁFICA DEL LOTE", negrita=True, tam=12,
-           color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
-    ws.row_dimensions[foto_fila].height = 24
-
-    IMG_ANCHO = 110
-    IMG_ALTO = 85
-    COLS_FOTO = 6
-
-    for idx, (fb, datos) in enumerate(zip(fotos_bytes, tabla)):
-        fila_bloque = idx // COLS_FOTO
-        col_bloque = idx % COLS_FOTO
-        fi = foto_fila + 1 + fila_bloque * 8
-        col = col_bloque + 1
-
-        ws.row_dimensions[fi].height = 65
-        ws.row_dimensions[fi + 6].height = 16
-
-        c_num = ws.cell(row=fi, column=col)
-        c_num.value = str(idx+1)
-        c_num.font = Font(bold=True, size=9, color=BLANCO)
-        c_num.fill = PatternFill("solid", fgColor=VERDE)
-        c_num.alignment = Alignment(horizontal="center", vertical="top")
-        c_num.border = borde_fino
-
-        c_ser = ws.cell(row=fi+6, column=col)
-        c_ser.value = datos["serie_medidor"]
-        c_ser.font = Font(bold=True, size=8, color=VERDE)
-        c_ser.fill = PatternFill("solid", fgColor=VERDE_CLARO)
-        c_ser.alignment = Alignment(horizontal="center", vertical="center")
-        c_ser.border = borde_fino
-
-        try:
-            img = PIL.Image.open(io.BytesIO(fb))
-            img.thumbnail((IMG_ANCHO, IMG_ALTO))
-            ib = io.BytesIO()
-            img.save(ib, format="PNG")
-            ib.seek(0)
-            xl_img = XLImage(ib)
-            xl_img.width = IMG_ANCHO
-            xl_img.height = IMG_ALTO
-            ws.add_image(xl_img, f"{get_column_letter(col)}{fi}")
-        except Exception:
-            ws.cell(row=fi, column=col).value = "N/D"
+    # INFO SOBRE LAS FOTOS
+    info_fila = 10 + total + 2
+    ws.merge_cells(f"A{info_fila}:J{info_fila}")
+    estilo(ws, f"A{info_fila}",
+           "💡 Las fotos están en la carpeta 'imagenes/'. Haz clic en cada enlace de la columna Foto para abrirlas.",
+           tam=10, italica=True, color_texto="404040", color_fondo=AMARILLO, borde=borde_fino)
+    ws.row_dimensions[info_fila].height = 22
 
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
+
+def generar_zip(tabla, fotos_bytes, operario, fecha, lote):
+    # Generar nombres de imágenes
+    nombres_imagenes = []
+    for idx, datos in enumerate(tabla):
+        serie = datos.get("serie_medidor", f"med{idx+1}")
+        nombre = f"{str(idx+1).zfill(2)}_{serie}.png"
+        nombres_imagenes.append(nombre)
+
+    # Generar Excel con referencias a las imágenes
+    excel_buffer = generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes)
+
+    # Crear ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Excel principal
+        nombre_excel = f"Reporte_{lote}.xlsx"
+        zf.writestr(nombre_excel, excel_buffer.read())
+
+        # Imágenes en la carpeta imagenes/
+        for idx, (fb, nombre_img) in enumerate(zip(fotos_bytes, nombres_imagenes)):
+            try:
+                img = PIL.Image.open(io.BytesIO(fb))
+                img_buffer = io.BytesIO()
+                img.save(img_buffer, format="PNG")
+                img_buffer.seek(0)
+                zf.writestr(f"imagenes/{nombre_img}", img_buffer.read())
+            except Exception:
+                pass
+
+    zip_buffer.seek(0)
+    return zip_buffer
 
 # INTERFAZ
 st.markdown("---")
@@ -413,14 +413,15 @@ if st.session_state.procesado and st.session_state.tabla:
     confirmado = st.checkbox(f"Confirmo que el proceso fue supervisado correctamente por {operario}")
 
     if confirmado:
-        nombre_archivo = f"Medidores_{fecha.replace('/', '-').replace(':', '-').replace(' ', '_')}_{lote}.xlsx"
-        excel = generar_excel(tabla, fotos_bytes, operario, fecha, lote)
+        nombre_archivo = f"MetriLab_{lote}.zip"
+        zip_file = generar_zip(tabla, fotos_bytes, operario, fecha, lote)
 
         st.download_button(
-            label="📥 Descargar Excel",
-            data=excel,
+            label="📥 Descargar reporte completo (ZIP)",
+            data=zip_file,
             file_name=nombre_archivo,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/zip"
         )
+        st.info("El ZIP contiene el Excel y la carpeta de imágenes. Descomprime para usar los enlaces.")
     else:
-        st.warning("Debes confirmar la supervision antes de descargar el Excel.")
+        st.warning("Debes confirmar la supervision antes de descargar el reporte.")
