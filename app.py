@@ -251,7 +251,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
             datos["serie_precinto"] or "N/D",
             f"{datos['registro']} {unidad_normalizada}", "", obs
         ]
-        for col, val in enumerate(valores, 1):
+    for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
             color = color_fila
             if col == 11 and obs != "NINGUNA":
