@@ -198,8 +198,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes):
     ws.row_dimensions[8].height = 22
 
     # FILA 9: SUBENCABEZADOS
-    cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie\nMedidor", "Vol.\nCíclico",
-                  "Tipo", "Color", "Nro. Serie\nPrecinto", "Registro\nInicial (m³)", "Foto"]
+    cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie Medidor", "Vol. Cíclico",
+                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)", "Foto"]
     for i, h in enumerate(cols_tabla):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
