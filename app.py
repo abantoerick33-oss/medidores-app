@@ -411,6 +411,9 @@ if fotos:
             datos = procesar_imagen(imagen)
 
             if datos:
+                # Limpiar ceros a la izquierda del registro
+                if datos.get("registro"):
+                    datos["registro"] = str(datos["registro"]).lstrip("0") or "0"
                 st.session_state.tabla.append(datos)
                 st.session_state.observaciones_lote.append("")
                 st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
