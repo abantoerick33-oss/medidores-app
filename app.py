@@ -199,22 +199,22 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     estado = "APROBADO"
 
     tarjetas = [
-        ("A5", "D6", "TOTAL DE\nMEDIDORES", str(total), AZUL, AZUL_CLARO),
-        ("E5", "H6", "MARCA DEL\nLOTE", marca_tarjeta, VERDE, VERDE_CLARO),
-        ("I5", "L6", "MODELO", modelo_tarjeta, "6C3483", "F4ECF7"),
-        ("M5", "Q6", "ESTADO DEL\nLOTE", estado, VERDE, VERDE_CLARO),
+        ("A5", "D6", "TOTAL DE MEDIDORES", str(total)),
+        ("E5", "H6", "MARCA DEL LOTE", marca_tarjeta),
+        ("I5", "L6", "MODELO", modelo_tarjeta),
+        ("M5", "Q6", "ESTADO DEL LOTE", estado),
     ]
 
-    for inicio, fin, titulo, valor, color_t, color_v in tarjetas:
+    for inicio, fin, titulo, valor in tarjetas:
         ws.merge_cells(f"{inicio}:{fin}")
-        estilo(ws, inicio, f"{titulo}\n\n{valor}",
-               negrita=True, tam=11, color_fondo=color_v, borde=borde_medio)
+        estilo(ws, inicio, f"{titulo}\n{valor}",
+               negrita=True, tam=11, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
         ws[inicio].alignment = Alignment(
             horizontal="center", vertical="center", wrap_text=True
         )
 
     for r in [5, 6]:
-        ws.row_dimensions[r].height = 28
+        ws.row_dimensions[r].height = 22
 
     ws.row_dimensions[7].height = 6
 
