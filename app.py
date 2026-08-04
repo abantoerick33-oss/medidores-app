@@ -59,7 +59,7 @@ Instrucciones detalladas:
 - marca: nombre del fabricante (ej: METREX)
 - modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
 - serie_medidor: numero de serie del medidor (ej: 3809043)
-- registro: lectura actual del contador con todos los digitos incluyendo los que estan en rojo, usar SIEMPRE coma como separador decimal, nunca punto (ej: 00954,095 no 00954.095). Los digitos en rojo son parte del registro.
+- registro: SOLAMENTE los 5 primeros dígitos del contador (los enteros que están ANTES de la coma). NO incluyas la coma ni los dígitos rojos. Ejemplos: si ves "00123,422" devuelve "00123". Si ves "00954,095" devuelve "00954".
 - unidad: unidad de medida del registro (ej: m3)
 - volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm3)
 
@@ -245,11 +245,13 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         marca = datos.get("marca") or MARCA_DEFAULT
         modelo = datos.get("modelo") or MODELO_DEFAULT
         obs = observaciones[idx] if idx < len(observaciones) else "NINGUNA"
+        # Limpiar ceros a la izquierda del registro
+        registro_limpio = str(datos["registro"]).lstrip("0") or "0"
         valores = [
             idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
-            f"{datos['registro']} {unidad_normalizada}", "", obs
+            f"{registro_limpio} {unidad_normalizada}", "", obs
         ]
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
