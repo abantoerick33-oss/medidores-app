@@ -91,8 +91,8 @@ if "observaciones_lote" not in st.session_state:
     st.session_state.observaciones_lote = []
 if "registros_finales" not in st.session_state:
     st.session_state.registros_finales = []
-if "lotes_eliminados" not in st.session_state:
-    st.session_state.lotes_eliminados = []
+if "historial_lotes" not in st.session_state:
+    st.session_state.historial_lotes = []
 if "contador_lote_dia" not in st.session_state:
     st.session_state.contador_lote_dia = {}
 
@@ -449,6 +449,15 @@ if fotos:
         st.session_state.procesado = True
         status.text("Procesamiento completado.")
 
+        st.session_state.historial_lotes.append({
+            "lote": st.session_state.lote_guardado,
+            "operario": operario,
+            "fecha": fecha,
+            "total": len(st.session_state.tabla),
+            "eliminado": False,
+            "motivo": None,
+        })
+
 if st.session_state.procesado and st.session_state.tabla:
     tabla = st.session_state.tabla
     fotos_bytes = st.session_state.fotos_bytes
@@ -499,32 +508,6 @@ if st.session_state.procesado and st.session_state.tabla:
 
     st.markdown("---")
 
-    with st.expander("🗑️ Eliminar este lote"):
-        st.caption("Si este lote no debe continuar (error de captura, prueba anulada, etc.), puedes eliminarlo. Se descartarán los datos y solo quedará registrado el número de lote y el motivo.")
-        motivo_eliminacion = st.text_area(
-            "Motivo de la eliminación",
-            key="motivo_elim",
-            placeholder="Ej: Se repitió el lote por error en la carga de fotos"
-        )
-        confirmar_eliminacion = st.checkbox(f"Confirmo que quiero eliminar el lote {lote}. Esta acción no se puede deshacer.")
-        if st.button("🗑️ Eliminar lote", type="secondary", disabled=not confirmar_eliminacion):
-            if motivo_eliminacion.strip():
-                st.session_state.lotes_eliminados.append({
-                    "lote": lote,
-                    "motivo": motivo_eliminacion.strip()
-                })
-                st.session_state.tabla = []
-                st.session_state.fotos_bytes = []
-                st.session_state.procesado = False
-                st.session_state.observaciones_lote = []
-                st.session_state.registros_finales = []
-                st.success(f"Lote {lote} eliminado. Motivo registrado.")
-                st.rerun()
-            else:
-                st.warning("Debes escribir un motivo antes de eliminar el lote.")
-
-    st.markdown("---")
-
     todas_llenas = all(obs != "" for obs in st.session_state.observaciones_lote)
     if not todas_llenas:
         st.warning("⚠️ Debes seleccionar una observación para cada medidor antes de continuar.")
@@ -545,8 +528,47 @@ if st.session_state.procesado and st.session_state.tabla:
     elif not confirmado:
         st.warning("Debes confirmar la supervisión antes de descargar el reporte.")
 
-if st.session_state.lotes_eliminados:
+if st.session_state.historial_lotes:
     st.markdown("---")
-    st.subheader("🗑️ Lotes eliminados en esta sesión")
-    for item in st.session_state.lotes_eliminados:
-        st.markdown(f"- **{item['lote']}** — Motivo: {item['motivo']}")
+    st.subheader("📋 Mis lotes de esta sesión")
+    st.caption("Aquí quedan registrados todos los lotes generados en esta sesión. Puedes eliminar cualquiera indicando el motivo.")
+
+    for entry in reversed(st.session_state.historial_lotes):
+        lote_id = entry["lote"]
+        with st.container(border=True):
+            col_info, col_accion = st.columns([3, 2])
+            with col_info:
+                estado = "❌ Eliminado" if entry["eliminado"] else "✅ Activo"
+                st.markdown(f"**{lote_id}** — {estado}")
+                st.caption(f"Operario: {entry['operario']} | Fecha: {entry['fecha']} | Medidores: {entry['total']}")
+                if entry["eliminado"]:
+                    st.caption(f"Motivo: {entry['motivo']}")
+            with col_accion:
+                if not entry["eliminado"]:
+                    with st.expander("🗑️ Eliminar este lote"):
+                        motivo_key = f"motivo_elim_{lote_id}"
+                        confirmar_key = f"confirmar_elim_{lote_id}"
+                        motivo_eliminacion = st.text_area(
+                            "Motivo de la eliminación",
+                            key=motivo_key,
+                            placeholder="Ej: Se repitió el lote por error en la carga de fotos"
+                        )
+                        confirmar_eliminacion = st.checkbox(
+                            f"Confirmo que quiero eliminar el lote {lote_id}. Esta acción no se puede deshacer.",
+                            key=confirmar_key
+                        )
+                        if st.button("🗑️ Eliminar lote", type="secondary", key=f"btn_elim_{lote_id}", disabled=not confirmar_eliminacion):
+                            if motivo_eliminacion.strip():
+                                entry["eliminado"] = True
+                                entry["motivo"] = motivo_eliminacion.strip()
+                                # Si el lote eliminado es el que está activo en pantalla, se limpia la vista de captura
+                                if st.session_state.lote_guardado == lote_id:
+                                    st.session_state.tabla = []
+                                    st.session_state.fotos_bytes = []
+                                    st.session_state.procesado = False
+                                    st.session_state.observaciones_lote = []
+                                    st.session_state.registros_finales = []
+                                st.success(f"Lote {lote_id} eliminado. Motivo registrado.")
+                                st.rerun()
+                            else:
+                                st.warning("Debes escribir un motivo antes de eliminar el lote.")
