@@ -9,6 +9,7 @@ import json
 import time
 import io
 import zipfile
+import requests
 from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Registro de Medidores", page_icon="📊", layout="centered")
@@ -20,6 +21,13 @@ API_KEYS = [
     st.secrets["GEMINI_API_KEY_2"],
     st.secrets["GEMINI_API_KEY_3"],
 ]
+
+# Mismo proyecto Firebase que usa jefe.html. La API Key de Firebase Web
+# no es secreta (ya está pública en jefe.html) — la seguridad la dan las
+# reglas de Firestore, no esta clave.
+FIREBASE_PROJECT_ID = "metrilab-appjefe"
+FIREBASE_API_KEY = "AIzaSyCpRopyllFTQu3puQtRlLWAy83JXXgvXI0"
+FIREBASE_URL = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/lotes"
 
 OPERARIOS = ["Joseph Erik Abanto Guerra", "Marco David Rodríguez Valencia"]
 
@@ -107,6 +115,70 @@ def generar_lote(fecha_dt):
 def registro_inicial_de(datos):
     """Devuelve el registro inicial de un medidor como número entero, sin ceros a la izquierda."""
     return int(str(datos["registro"]).lstrip("0") or "0")
+
+def _valor_firestore(v):
+    """Convierte un valor de Python al formato de campo que espera la API REST de Firestore."""
+    if v is None:
+        return {"nullValue": None}
+    if isinstance(v, bool):
+        return {"booleanValue": v}
+    if isinstance(v, int):
+        return {"integerValue": str(v)}
+    if isinstance(v, float):
+        return {"doubleValue": v}
+    if isinstance(v, list):
+        return {"arrayValue": {"values": [_valor_firestore(x) for x in v]}}
+    if isinstance(v, dict):
+        return {"mapValue": {"fields": {k: _valor_firestore(val) for k, val in v.items()}}}
+    return {"stringValue": str(v)}
+
+def _campos_firestore(d):
+    return {k: _valor_firestore(v) for k, v in d.items()}
+
+def guardar_lote_en_firebase(lote_codigo, operario, fecha, tabla, observaciones, registros_finales):
+    """Crea el documento del lote en Firestore para que aparezca en jefe.html. Devuelve el id del documento o None si falló."""
+    medidores = []
+    for idx, datos in enumerate(tabla):
+        medidores.append({
+            "serie_medidor": datos.get("serie_medidor") or "",
+            "registro": str(registro_inicial_de(datos)),
+            "registro_final": str(registros_finales[idx] if idx < len(registros_finales) else 0),
+            "unidad": "m³",
+            "serie_precinto": datos.get("serie_precinto") or "N/D",
+            "observacion": observaciones[idx] if idx < len(observaciones) else "NINGUNA",
+        })
+    campos = _campos_firestore({
+        "lote": lote_codigo,
+        "operario": operario,
+        "fecha": fecha,
+        "cantidadMedidores": len(tabla),
+        "medidores": medidores,
+        "origen": "web",
+        "eliminado": False,
+        "motivoEliminacion": "",
+    })
+    campos["creado"] = {"timestampValue": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
+    try:
+        resp = requests.post(f"{FIREBASE_URL}?key={FIREBASE_API_KEY}", json={"fields": campos}, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get("name", "").split("/")[-1]
+    except Exception:
+        pass
+    return None
+
+def actualizar_eliminacion_firebase(doc_id, motivo):
+    """Marca en Firestore que el lote fue eliminado, guardando el motivo. Devuelve True/False según el resultado."""
+    if not doc_id:
+        return False
+    url = (f"{FIREBASE_URL}/{doc_id}"
+           f"?updateMask.fieldPaths=eliminado&updateMask.fieldPaths=motivoEliminacion"
+           f"&key={FIREBASE_API_KEY}")
+    payload = {"fields": _campos_firestore({"eliminado": True, "motivoEliminacion": motivo})}
+    try:
+        resp = requests.patch(url, json=payload, timeout=10)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 def procesar_imagen(imagen):
     ultimo_error = None
@@ -449,6 +521,16 @@ if fotos:
         st.session_state.procesado = True
         status.text("Procesamiento completado.")
 
+        firebase_id = guardar_lote_en_firebase(
+            st.session_state.lote_guardado, operario, fecha,
+            st.session_state.tabla, st.session_state.observaciones_lote,
+            st.session_state.registros_finales
+        )
+        if firebase_id:
+            st.caption("☁️ Lote sincronizado con el panel del jefe.")
+        else:
+            st.warning("⚠️ No se pudo sincronizar este lote con el panel del jefe (revisa tu conexión). Los datos siguen disponibles aquí.")
+
         st.session_state.historial_lotes.append({
             "lote": st.session_state.lote_guardado,
             "operario": operario,
@@ -456,6 +538,7 @@ if fotos:
             "total": len(st.session_state.tabla),
             "eliminado": False,
             "motivo": None,
+            "firebase_id": firebase_id,
         })
 
 if st.session_state.procesado and st.session_state.tabla:
@@ -561,6 +644,7 @@ if st.session_state.historial_lotes:
                             if motivo_eliminacion.strip():
                                 entry["eliminado"] = True
                                 entry["motivo"] = motivo_eliminacion.strip()
+                                sincronizado = actualizar_eliminacion_firebase(entry.get("firebase_id"), entry["motivo"])
                                 # Si el lote eliminado es el que está activo en pantalla, se limpia la vista de captura
                                 if st.session_state.lote_guardado == lote_id:
                                     st.session_state.tabla = []
@@ -568,7 +652,10 @@ if st.session_state.historial_lotes:
                                     st.session_state.procesado = False
                                     st.session_state.observaciones_lote = []
                                     st.session_state.registros_finales = []
-                                st.success(f"Lote {lote_id} eliminado. Motivo registrado.")
+                                if sincronizado:
+                                    st.success(f"Lote {lote_id} eliminado. Motivo registrado y sincronizado con el panel del jefe.")
+                                else:
+                                    st.warning(f"Lote {lote_id} eliminado localmente, pero no se pudo avisar al panel del jefe (revisa la conexión).")
                                 st.rerun()
                             else:
                                 st.warning("Debes escribir un motivo antes de eliminar el lote.")
