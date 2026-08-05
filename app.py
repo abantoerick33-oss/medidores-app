@@ -91,6 +91,8 @@ if "observaciones_lote" not in st.session_state:
     st.session_state.observaciones_lote = []
 if "registros_finales" not in st.session_state:
     st.session_state.registros_finales = []
+if "lotes_eliminados" not in st.session_state:
+    st.session_state.lotes_eliminados = []
 if "contador_lote_dia" not in st.session_state:
     st.session_state.contador_lote_dia = {}
 
@@ -102,7 +104,12 @@ def generar_lote(fecha_dt):
     qv = st.session_state.contador_lote_dia[fecha_clave]
     return f"QV{qv}-VP-{fecha_clave}"
 
+def registro_inicial_de(datos):
+    """Devuelve el registro inicial de un medidor como número entero, sin ceros a la izquierda."""
+    return int(str(datos["registro"]).lstrip("0") or "0")
+
 def procesar_imagen(imagen):
+    ultimo_error = None
     for key_idx, api_key in enumerate(API_KEYS):
         try:
             client = genai.Client(api_key=api_key)
@@ -111,13 +118,14 @@ def procesar_imagen(imagen):
                 contents=[prompt, imagen]
             )
             texto = respuesta.text.strip().replace("```json","").replace("```","")
-            return json.loads(texto)
-        except Exception:
+            return json.loads(texto), None
+        except Exception as e:
+            ultimo_error = str(e)
             if key_idx < len(API_KEYS) - 1:
                 time.sleep(3)
                 continue
             else:
-                return None
+                return None, ultimo_error
 
 def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
            color_fondo=None, alineacion="center", borde=None, alto=None, italica=False):
@@ -250,7 +258,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         obs = observaciones[idx] if idx < len(observaciones) else "NINGUNA"
         # Limpiar ceros a la izquierda del registro
         registro_limpio = str(datos["registro"]).lstrip("0") or "0"
-        registro_inicial_num = int(registro_limpio)
+        registro_inicial_num = registro_inicial_de(datos)
         registro_final_num = registros_finales[idx] if idx < len(registros_finales) else registro_inicial_num
         diferencia_num = registro_final_num - registro_inicial_num
         valores = [
@@ -400,6 +408,8 @@ fotos = st.file_uploader(
 
 if fotos:
     st.info(f"{len(fotos)} foto(s) seleccionada(s)")
+    if len(fotos) > 12:
+        st.warning(f"⚠️ Subiste {len(fotos)} fotos, pero solo se procesarán las primeras 12. Las {len(fotos) - 12} restantes serán ignoradas.")
 
     if st.button("Procesar medidores", type="primary"):
         st.session_state.tabla = []
@@ -420,7 +430,7 @@ if fotos:
             foto_bytes = foto.read()
             st.session_state.fotos_bytes.append(foto_bytes)
             imagen = PIL.Image.open(io.BytesIO(foto_bytes))
-            datos = procesar_imagen(imagen)
+            datos, error = procesar_imagen(imagen)
 
             if datos:
                 # Limpiar ceros a la izquierda del registro
@@ -428,11 +438,10 @@ if fotos:
                     datos["registro"] = str(datos["registro"]).lstrip("0") or "0"
                 st.session_state.tabla.append(datos)
                 st.session_state.observaciones_lote.append("")
-                registro_inicial_num = int(str(datos["registro"]).lstrip("0") or "0")
-                st.session_state.registros_finales.append(registro_inicial_num)
+                st.session_state.registros_finales.append(registro_inicial_de(datos))
                 st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
-                st.error(f"No se pudo procesar el medidor {i+1}")
+                st.error(f"No se pudo procesar el medidor {i+1}. Motivo: {error or 'desconocido'}")
 
             progress.progress((i+1) / len(fotos))
             time.sleep(5)
@@ -457,7 +466,7 @@ if st.session_state.procesado and st.session_state.tabla:
         st.session_state.registros_finales.append(0)
 
     for i, d in enumerate(tabla):
-        registro_inicial_num = int(str(d["registro"]).lstrip("0") or "0")
+        registro_inicial_num = registro_inicial_de(d)
 
         col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
@@ -473,11 +482,10 @@ if st.session_state.procesado and st.session_state.tabla:
             if i < len(st.session_state.observaciones_lote):
                 st.session_state.observaciones_lote[i] = seleccion
         with col3:
-            valor_actual = st.session_state.registros_finales[i] or registro_inicial_num
             reg_final = st.number_input(
                 f"Registro final medidor {i+1}",
                 min_value=0,
-                value=int(valor_actual),
+                value=int(st.session_state.registros_finales[i]),
                 step=1,
                 key=f"regfinal_{i}",
                 label_visibility="collapsed"
@@ -488,6 +496,32 @@ if st.session_state.procesado and st.session_state.tabla:
                 st.caption(f"⚠️ Diferencia: {diferencia} m³ (revisar lectura)")
             else:
                 st.caption(f"Diferencia: {diferencia} m³")
+
+    st.markdown("---")
+
+    with st.expander("🗑️ Eliminar este lote"):
+        st.caption("Si este lote no debe continuar (error de captura, prueba anulada, etc.), puedes eliminarlo. Se descartarán los datos y solo quedará registrado el número de lote y el motivo.")
+        motivo_eliminacion = st.text_area(
+            "Motivo de la eliminación",
+            key="motivo_elim",
+            placeholder="Ej: Se repitió el lote por error en la carga de fotos"
+        )
+        confirmar_eliminacion = st.checkbox(f"Confirmo que quiero eliminar el lote {lote}. Esta acción no se puede deshacer.")
+        if st.button("🗑️ Eliminar lote", type="secondary", disabled=not confirmar_eliminacion):
+            if motivo_eliminacion.strip():
+                st.session_state.lotes_eliminados.append({
+                    "lote": lote,
+                    "motivo": motivo_eliminacion.strip()
+                })
+                st.session_state.tabla = []
+                st.session_state.fotos_bytes = []
+                st.session_state.procesado = False
+                st.session_state.observaciones_lote = []
+                st.session_state.registros_finales = []
+                st.success(f"Lote {lote} eliminado. Motivo registrado.")
+                st.rerun()
+            else:
+                st.warning("Debes escribir un motivo antes de eliminar el lote.")
 
     st.markdown("---")
 
@@ -510,3 +544,9 @@ if st.session_state.procesado and st.session_state.tabla:
         st.info("El ZIP contiene el Excel y la carpeta de imágenes. Descomprime para usar los enlaces.")
     elif not confirmado:
         st.warning("Debes confirmar la supervisión antes de descargar el reporte.")
+
+if st.session_state.lotes_eliminados:
+    st.markdown("---")
+    st.subheader("🗑️ Lotes eliminados en esta sesión")
+    for item in st.session_state.lotes_eliminados:
+        st.markdown(f"- **{item['lote']}** — Motivo: {item['motivo']}")
