@@ -207,7 +207,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     for inicio, fin, titulo, valor in tarjetas:
         ws.merge_cells(f"{inicio}:{fin}")
-        estilo(ws, inicio, f"{titulo}{valor}",
+        estilo(ws, inicio, f"{titulo}/n{valor}",
                negrita=True, tam=11, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
         ws[inicio].alignment = Alignment(
             horizontal="center", vertical="center", wrap_text=True
