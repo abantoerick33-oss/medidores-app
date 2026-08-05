@@ -89,6 +89,8 @@ if "lote_guardado" not in st.session_state:
     st.session_state.lote_guardado = ""
 if "observaciones_lote" not in st.session_state:
     st.session_state.observaciones_lote = []
+if "registros_finales" not in st.session_state:
+    st.session_state.registros_finales = []
 if "contador_lote_dia" not in st.session_state:
     st.session_state.contador_lote_dia = {}
 
@@ -135,7 +137,7 @@ def estilo(ws, celda, valor, negrita=False, tam=10, color_texto="000000",
         c.border = borde
     return c
 
-def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones):
+def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones, registros_finales):
     wb = Workbook()
     ws = wb.active
     ws.title = "Registro"
@@ -163,18 +165,18 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     total = len(tabla)
     correctos = total
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 10, 35, 5, 14, 5, 12, 8, 2.11]
+    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 16, 12, 10, 35, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
     # FILA 1: TÍTULO
-    ws.merge_cells("A1:Q1")
+    ws.merge_cells("A1:S1")
     estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
            negrita=True, tam=18, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
     ws.row_dimensions[1].height = 35
 
     # FILA 2: SUBTÍTULO
-    ws.merge_cells("A2:Q2")
+    ws.merge_cells("A2:S2")
     estilo(ws, "A2", "Reporte automático de inspección y registro de medidores",
            tam=10, italica=True, color_texto="404040", color_fondo=GRIS, borde=borde_fino)
     ws.row_dimensions[2].height = 18
@@ -183,11 +185,11 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ws.merge_cells("A3:D3")
     estilo(ws, "A3", f"👤 Operario: {operario}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-    ws.merge_cells("E3:J3")
+    ws.merge_cells("E3:L3")
     estilo(ws, "E3", f"📅 Fecha: {fecha}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino)
-    ws.merge_cells("K3:Q3")
-    estilo(ws, "K3", f"🏷 Lote: {lote}", negrita=True,
+    ws.merge_cells("M3:S3")
+    estilo(ws, "M3", f"🏷 Lote: {lote}", negrita=True,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[3].height = 22
 
@@ -201,8 +203,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     tarjetas = [
         ("A5", "D6", "TOTAL DE MEDIDORES", str(total)),
         ("E5", "H6", "MARCA DEL LOTE", marca_tarjeta),
-        ("I5", "L6", "MODELO", modelo_tarjeta),
-        ("M5", "Q6", "ESTADO DEL LOTE", estado),
+        ("I5", "N6", "MODELO", modelo_tarjeta),
+        ("O5", "S6", "ESTADO DEL LOTE", estado),
     ]
 
     for inicio, fin, titulo, valor in tarjetas:
@@ -219,14 +221,15 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ws.row_dimensions[7].height = 6
 
     # FILA 8: ENCABEZADO TABLA
-    ws.merge_cells("A8:K8")
+    ws.merge_cells("A8:M8")
     estilo(ws, "A8", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[8].height = 22
 
     # FILA 9: SUBENCABEZADOS
     cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie Medidor", "Vol. Cíclico",
-                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)", "Foto", "Observación"]
+                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)",
+                  "Registro Final (m³)", "Diferencia (m³)", "Foto", "Observación"]
     for i, h in enumerate(cols_tabla):
         c = ws.cell(row=9, column=i+1)
         estilo(ws, c, h, negrita=True, tam=9, color_texto=BLANCO,
@@ -247,23 +250,31 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         obs = observaciones[idx] if idx < len(observaciones) else "NINGUNA"
         # Limpiar ceros a la izquierda del registro
         registro_limpio = str(datos["registro"]).lstrip("0") or "0"
+        registro_inicial_num = int(registro_limpio)
+        registro_final_num = registros_finales[idx] if idx < len(registros_finales) else registro_inicial_num
+        diferencia_num = registro_final_num - registro_inicial_num
         valores = [
             idx+1, marca, modelo, datos["serie_medidor"],
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
-            f"{registro_limpio} {unidad_normalizada}", "", obs
+            f"{registro_limpio} {unidad_normalizada}",
+            f"{registro_final_num} {unidad_normalizada}",
+            f"{diferencia_num} {unidad_normalizada}",
+            "", obs
         ]
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
             color = color_fila
-            if col == 11 and obs != "NINGUNA":
+            if col == 11 and diferencia_num < 0:
+                color = "FDEDEC"
+            if col == 13 and obs != "NINGUNA":
                 color = "FDEDEC"
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
-            if col == 11:
+            if col == 13:
                 c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
         # Hipervínculo
         nombre_img = nombres_imagenes[idx]
-        c_link = ws.cell(row=fila, column=10)
+        c_link = ws.cell(row=fila, column=12)
         c_link.value = f"📷 Ver foto {idx+1}"
         c_link.hyperlink = f"imagenes/{nombre_img}"
         c_link.font = Font(bold=True, size=9, color=AZUL_LINK, underline="single")
@@ -273,8 +284,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         ws.row_dimensions[fila].height = 16
 
     # PANEL DETALLES
-    ws.merge_cells("L8:Q8")
-    estilo(ws, "L8", "DETALLES DEL LOTE", negrita=True, tam=11,
+    ws.merge_cells("N8:S8")
+    estilo(ws, "N8", "DETALLES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
     detalles = [
@@ -292,17 +303,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     for i, (clave, valor) in enumerate(detalles):
         fila_d = 9 + i
-        ws.merge_cells(f"L{fila_d}:M{fila_d}")
-        estilo(ws, f"L{fila_d}", clave, negrita=True, tam=8,
+        ws.merge_cells(f"N{fila_d}:O{fila_d}")
+        estilo(ws, f"N{fila_d}", clave, negrita=True, tam=8,
                color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-        ws.merge_cells(f"N{fila_d}:Q{fila_d}")
-        estilo(ws, f"N{fila_d}", valor, tam=8,
+        ws.merge_cells(f"P{fila_d}:S{fila_d}")
+        estilo(ws, f"P{fila_d}", valor, tam=8,
                color_fondo=BLANCO, borde=borde_fino, alineacion="left")
         ws.row_dimensions[fila_d].height = 16
 
     cert_fila = 9 + len(detalles) + 1
-    ws.merge_cells(f"L{cert_fila}:Q{cert_fila+2}")
-    estilo(ws, f"L{cert_fila}",
+    ws.merge_cells(f"N{cert_fila}:S{cert_fila+2}")
+    estilo(ws, f"N{cert_fila}",
            f"Certifico que el proceso fue supervisado correctamente\n— {operario} —\n{fecha}",
            negrita=True, italica=True, tam=8,
            color_fondo=VERDE_CLARO, borde=borde_medio, alineacion="center")
@@ -312,8 +323,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     # ESTADÍSTICAS
     est_fila = cert_fila + 4
-    ws.merge_cells(f"L{est_fila}:Q{est_fila}")
-    estilo(ws, f"L{est_fila}", "RESUMEN DE OBSERVACIONES", negrita=True, tam=10,
+    ws.merge_cells(f"N{est_fila}:S{est_fila}")
+    estilo(ws, f"N{est_fila}", "RESUMEN DE OBSERVACIONES", negrita=True, tam=10,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
     ws.row_dimensions[est_fila].height = 20
 
@@ -326,16 +337,16 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ]
     for i, (nombre, valor, color) in enumerate(stats):
         fr = est_fila + 1 + i
-        ws.merge_cells(f"L{fr}:N{fr}")
-        estilo(ws, f"L{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
-        ws.merge_cells(f"O{fr}:Q{fr}")
+        ws.merge_cells(f"N{fr}:P{fr}")
+        estilo(ws, f"N{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
+        ws.merge_cells(f"Q{fr}:S{fr}")
         pct = f"{valor} ({int(valor/total*100) if total else 0}%)"
-        estilo(ws, f"O{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
+        estilo(ws, f"Q{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fr].height = 16
 
     # INFO FOTOS
     info_fila = 10 + total + 2
-    ws.merge_cells(f"A{info_fila}:K{info_fila}")
+    ws.merge_cells(f"A{info_fila}:M{info_fila}")
     estilo(ws, f"A{info_fila}",
            "💡 Las fotos están en la carpeta 'imagenes/'. Haz clic en cada enlace de la columna Foto para abrirlas.",
            tam=10, italica=True, color_texto="404040", color_fondo=AMARILLO, borde=borde_fino)
@@ -346,14 +357,14 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     buffer.seek(0)
     return buffer
 
-def generar_zip(tabla, fotos_bytes, operario, fecha, lote, observaciones):
+def generar_zip(tabla, fotos_bytes, operario, fecha, lote, observaciones, registros_finales):
     nombres_imagenes = []
     for idx, datos in enumerate(tabla):
         serie = datos.get("serie_medidor", f"med{idx+1}")
         nombre = f"{str(idx+1).zfill(2)}_{serie}.png"
         nombres_imagenes.append(nombre)
 
-    excel_buffer = generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones)
+    excel_buffer = generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, observaciones, registros_finales)
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -398,6 +409,7 @@ if fotos:
         st.session_state.fecha_guardada = fecha
         st.session_state.lote_guardado = generar_lote(ahora)
         st.session_state.observaciones_lote = []
+        st.session_state.registros_finales = []
 
         progress = st.progress(0)
         status = st.empty()
@@ -416,6 +428,8 @@ if fotos:
                     datos["registro"] = str(datos["registro"]).lstrip("0") or "0"
                 st.session_state.tabla.append(datos)
                 st.session_state.observaciones_lote.append("")
+                registro_inicial_num = int(str(datos["registro"]).lstrip("0") or "0")
+                st.session_state.registros_finales.append(registro_inicial_num)
                 st.success(f"Medidor {i+1}: Serie {datos['serie_medidor']} | Registro {datos['registro']} {datos['unidad']} | Precinto {datos['serie_precinto']}")
             else:
                 st.error(f"No se pudo procesar el medidor {i+1}")
@@ -437,12 +451,18 @@ if st.session_state.procesado and st.session_state.tabla:
     st.subheader(f"Lote: {lote}")
     st.subheader("Tabla completa del lote")
 
-    st.markdown("**Selecciona una observación para cada medidor:**")
+    st.markdown("**Ingresa el registro final y selecciona una observación para cada medidor:**")
+
+    while len(st.session_state.registros_finales) < len(tabla):
+        st.session_state.registros_finales.append(0)
 
     for i, d in enumerate(tabla):
-        col1, col2 = st.columns([2, 3])
+        registro_inicial_num = int(str(d["registro"]).lstrip("0") or "0")
+
+        col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
-            st.markdown(f"**#{i+1}** — Serie: `{d['serie_medidor']}` | Registro: `{d['registro']} {d['unidad']}`")
+            st.markdown(f"**#{i+1}** — Serie: `{d['serie_medidor']}`")
+            st.caption(f"Registro inicial: {registro_inicial_num} m³")
         with col2:
             seleccion = st.selectbox(
                 f"Observación medidor {i+1}",
@@ -452,6 +472,22 @@ if st.session_state.procesado and st.session_state.tabla:
             )
             if i < len(st.session_state.observaciones_lote):
                 st.session_state.observaciones_lote[i] = seleccion
+        with col3:
+            valor_actual = st.session_state.registros_finales[i] or registro_inicial_num
+            reg_final = st.number_input(
+                f"Registro final medidor {i+1}",
+                min_value=0,
+                value=int(valor_actual),
+                step=1,
+                key=f"regfinal_{i}",
+                label_visibility="collapsed"
+            )
+            st.session_state.registros_finales[i] = reg_final
+            diferencia = reg_final - registro_inicial_num
+            if diferencia < 0:
+                st.caption(f"⚠️ Diferencia: {diferencia} m³ (revisar lectura)")
+            else:
+                st.caption(f"Diferencia: {diferencia} m³")
 
     st.markdown("---")
 
@@ -463,7 +499,7 @@ if st.session_state.procesado and st.session_state.tabla:
 
     if confirmado and todas_llenas:
         nombre_archivo = f"MetriLab_{lote}.zip"
-        zip_file = generar_zip(tabla, fotos_bytes, operario, fecha, lote, st.session_state.observaciones_lote)
+        zip_file = generar_zip(tabla, fotos_bytes, operario, fecha, lote, st.session_state.observaciones_lote, st.session_state.registros_finales)
 
         st.download_button(
             label="📥 Descargar reporte completo (ZIP)",
