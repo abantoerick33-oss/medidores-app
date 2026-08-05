@@ -101,6 +101,8 @@ if "registros_finales" not in st.session_state:
     st.session_state.registros_finales = []
 if "historial_lotes" not in st.session_state:
     st.session_state.historial_lotes = []
+if "historial_cargado" not in st.session_state:
+    st.session_state.historial_cargado = False
 if "contador_lote_dia" not in st.session_state:
     st.session_state.contador_lote_dia = {}
 
@@ -134,6 +136,47 @@ def _valor_firestore(v):
 
 def _campos_firestore(d):
     return {k: _valor_firestore(v) for k, v in d.items()}
+
+def _valor_python(campo):
+    """Convierte un campo tipado de Firestore de vuelta a un valor normal de Python."""
+    if "stringValue" in campo:
+        return campo["stringValue"]
+    if "integerValue" in campo:
+        return int(campo["integerValue"])
+    if "doubleValue" in campo:
+        return campo["doubleValue"]
+    if "booleanValue" in campo:
+        return campo["booleanValue"]
+    if "arrayValue" in campo:
+        return [_valor_python(v) for v in campo["arrayValue"].get("values", [])]
+    if "mapValue" in campo:
+        return {k: _valor_python(v) for k, v in campo["mapValue"].get("fields", {}).items()}
+    return None
+
+def obtener_lotes_de_firebase():
+    """Trae todos los lotes guardados en Firestore (de cualquier sesión anterior). Devuelve None si falla la conexión."""
+    try:
+        url = f"{FIREBASE_URL}?orderBy=creado%20desc&pageSize=200&key={FIREBASE_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return None
+        documentos = resp.json().get("documents", [])
+        lotes = []
+        for doc in documentos:
+            campos = {k: _valor_python(v) for k, v in doc.get("fields", {}).items()}
+            lotes.append({
+                "lote": campos.get("lote", "Sin código"),
+                "operario": campos.get("operario", ""),
+                "fecha": campos.get("fecha", ""),
+                "total": campos.get("cantidadMedidores", 0),
+                "eliminado": campos.get("eliminado", False),
+                "motivo": campos.get("motivoEliminacion") or None,
+                "origen": campos.get("origen", "web"),
+                "firebase_id": doc["name"].split("/")[-1],
+            })
+        return lotes
+    except Exception:
+        return None
 
 def guardar_lote_en_firebase(lote_codigo, operario, fecha, tabla, observaciones, registros_finales):
     """Crea el documento del lote en Firestore para que aparezca en jefe.html. Devuelve el id del documento o None si falló."""
@@ -611,11 +654,31 @@ if st.session_state.procesado and st.session_state.tabla:
     elif not confirmado:
         st.warning("Debes confirmar la supervisión antes de descargar el reporte.")
 
-if st.session_state.historial_lotes:
-    st.markdown("---")
-    st.subheader("📋 Mis lotes de esta sesión")
-    st.caption("Aquí quedan registrados todos los lotes generados en esta sesión. Puedes eliminar cualquiera indicando el motivo.")
+if not st.session_state.historial_cargado:
+    lotes_remotos = obtener_lotes_de_firebase()
+    if lotes_remotos is not None:
+        locales_sin_sync = [e for e in st.session_state.historial_lotes if not e.get("firebase_id")]
+        st.session_state.historial_lotes = lotes_remotos + locales_sin_sync
+    st.session_state.historial_cargado = True
 
+st.markdown("---")
+st.subheader("📋 Mis lotes")
+col_titulo, col_refrescar = st.columns([4, 1])
+with col_titulo:
+    st.caption("Historial guardado en Firebase — visible aunque cierres y vuelvas a abrir la app. Puedes eliminar cualquier lote indicando el motivo.")
+with col_refrescar:
+    if st.button("🔄 Actualizar"):
+        lotes_remotos = obtener_lotes_de_firebase()
+        if lotes_remotos is not None:
+            locales_sin_sync = [e for e in st.session_state.historial_lotes if not e.get("firebase_id")]
+            st.session_state.historial_lotes = lotes_remotos + locales_sin_sync
+            st.rerun()
+        else:
+            st.warning("No se pudo actualizar desde Firebase.")
+
+if not st.session_state.historial_lotes:
+    st.info("Todavía no hay lotes registrados.")
+else:
     for entry in reversed(st.session_state.historial_lotes):
         lote_id = entry["lote"]
         with st.container(border=True):
