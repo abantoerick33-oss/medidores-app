@@ -57,6 +57,7 @@ Extrae exactamente estos datos y devuélvelos SOLO en formato JSON sin texto adi
   "marca": "",
   "modelo": "",
   "serie_medidor": "",
+  "anio_medidor": "",
   "registro": "",
   "unidad": "",
   "volumen_ciclico": "",
@@ -67,6 +68,7 @@ Instrucciones detalladas:
 - marca: nombre del fabricante (ej: METREX)
 - modelo: capacidad del medidor, siempre con punto (ej: G1.6 no G1,6 ni G16)
 - serie_medidor: numero de serie del medidor (ej: 3809043)
+- anio_medidor: año de fabricación del medidor, 4 dígitos, impreso justo al lado o debajo del número de serie (ej: si el número de serie dice "0126896  2020", el año es "2020"). Es un año típicamente entre 2005 y el año actual.
 - registro: SOLAMENTE los 5 primeros dígitos del contador (los enteros que están ANTES de la coma). NO incluyas la coma ni los dígitos rojos. Ejemplos: si ves "00123,422" devuelve "00123". Si ves "00954,095" devuelve "00954".
 - unidad: unidad de medida del registro (ej: m3)
 - volumen_ciclico: valor V indicado en la placa (ej: 0.7 dm3)
@@ -184,6 +186,7 @@ def guardar_lote_en_firebase(lote_codigo, operario, fecha, tabla, observaciones,
     for idx, datos in enumerate(tabla):
         medidores.append({
             "serie_medidor": datos.get("serie_medidor") or "",
+            "anio": datos.get("anio_medidor") or "N/D",
             "registro": str(registro_inicial_de(datos)),
             "registro_final": str(registros_finales[idx] if idx < len(registros_finales) else 0),
             "unidad": "m³",
@@ -288,18 +291,18 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     total = len(tabla)
     correctos = total
 
-    anchos = [5, 10, 10, 16, 11, 10, 10, 16, 16, 16, 12, 10, 35, 5, 14, 5, 12, 8, 2.11]
+    anchos = [5, 10, 10, 16, 10, 11, 10, 10, 16, 16, 16, 12, 10, 35, 5, 14, 5, 12, 8, 2.11]
     for i, a in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = a
 
     # FILA 1: TÍTULO
-    ws.merge_cells("A1:S1")
+    ws.merge_cells("A1:T1")
     estilo(ws, "A1", "LABORATORIO DE MEDIDORES DE GAS",
            negrita=True, tam=18, color_texto=BLANCO, color_fondo=AZUL, borde=borde_medio)
     ws.row_dimensions[1].height = 35
 
     # FILA 2: SUBTÍTULO
-    ws.merge_cells("A2:S2")
+    ws.merge_cells("A2:T2")
     estilo(ws, "A2", "Reporte automático de inspección y registro de medidores",
            tam=10, italica=True, color_texto="404040", color_fondo=GRIS, borde=borde_fino)
     ws.row_dimensions[2].height = 18
@@ -308,11 +311,11 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ws.merge_cells("A3:D3")
     estilo(ws, "A3", f"👤 Operario: {operario}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-    ws.merge_cells("E3:L3")
+    ws.merge_cells("E3:M3")
     estilo(ws, "E3", f"📅 Fecha: {fecha}", negrita=True,
            color_fondo=AZUL_CLARO, borde=borde_fino)
-    ws.merge_cells("M3:S3")
-    estilo(ws, "M3", f"🏷 Lote: {lote}", negrita=True,
+    ws.merge_cells("N3:T3")
+    estilo(ws, "N3", f"🏷 Lote: {lote}", negrita=True,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[3].height = 22
 
@@ -325,9 +328,9 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     tarjetas = [
         ("A5", "D6", "TOTAL DE MEDIDORES", str(total)),
-        ("E5", "H6", "MARCA DEL LOTE", marca_tarjeta),
-        ("I5", "N6", "MODELO", modelo_tarjeta),
-        ("O5", "S6", "ESTADO DEL LOTE", estado),
+        ("F5", "I6", "MARCA DEL LOTE", marca_tarjeta),
+        ("J5", "O6", "MODELO", modelo_tarjeta),
+        ("P5", "T6", "ESTADO DEL LOTE", estado),
     ]
 
     for inicio, fin, titulo, valor in tarjetas:
@@ -344,14 +347,14 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ws.row_dimensions[7].height = 6
 
     # FILA 8: ENCABEZADO TABLA
-    ws.merge_cells("A8:M8")
+    ws.merge_cells("A8:N8")
     estilo(ws, "A8", "RESUMEN DE MEDIDORES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
     ws.row_dimensions[8].height = 22
 
     # FILA 9: SUBENCABEZADOS
-    cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie Medidor", "Vol. Cíclico",
-                  "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)",
+    cols_tabla = ["#", "Marca", "Modelo", "Nro. Serie Medidor", "Año",
+                  "Vol. Cíclico", "Tipo", "Color", "Nro. Serie Precinto", "Registro Inicial (m³)",
                   "Registro Final (m³)", "Diferencia (m³)", "Foto", "Observación"]
     for i, h in enumerate(cols_tabla):
         c = ws.cell(row=9, column=i+1)
@@ -376,8 +379,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         registro_inicial_num = registro_inicial_de(datos)
         registro_final_num = registros_finales[idx] if idx < len(registros_finales) else registro_inicial_num
         diferencia_num = registro_final_num - registro_inicial_num
-        valores = [
-            idx+1, marca, modelo, datos["serie_medidor"],
+        vvalores = [
+            idx+1, marca, modelo, datos["serie_medidor"], datos.get("anio_medidor") or "N/D",
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
             f"{registro_limpio} {unidad_normalizada}",
@@ -388,16 +391,16 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         for col, val in enumerate(valores, 1):
             c = ws.cell(row=fila, column=col)
             color = color_fila
-            if col == 11 and diferencia_num < 0:
+            if col == 12 and diferencia_num < 0:
                 color = "FDEDEC"
-            if col == 13 and obs != "NINGUNA":
+            if col == 14 and obs != "NINGUNA":
                 color = "FDEDEC"
             estilo(ws, c, val, tam=9, color_fondo=color, borde=borde_fino)
-            if col == 13:
+            if col == 14:
                 c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
         # Hipervínculo
         nombre_img = nombres_imagenes[idx]
-        c_link = ws.cell(row=fila, column=12)
+        c_link = ws.cell(row=fila, column=13)
         c_link.value = f"📷 Ver foto {idx+1}"
         c_link.hyperlink = f"imagenes/{nombre_img}"
         c_link.font = Font(bold=True, size=9, color=AZUL_LINK, underline="single")
@@ -407,8 +410,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         ws.row_dimensions[fila].height = 16
 
     # PANEL DETALLES
-    ws.merge_cells("N8:S8")
-    estilo(ws, "N8", "DETALLES DEL LOTE", negrita=True, tam=11,
+    ws.merge_cells("O8:T8")
+    estilo(ws, "O8", "DETALLES DEL LOTE", negrita=True, tam=11,
            color_texto=BLANCO, color_fondo=AZUL, borde=borde_fino)
 
     detalles = [
@@ -426,17 +429,17 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     for i, (clave, valor) in enumerate(detalles):
         fila_d = 9 + i
-        ws.merge_cells(f"N{fila_d}:O{fila_d}")
-        estilo(ws, f"N{fila_d}", clave, negrita=True, tam=8,
+        ws.merge_cells(f"O{fila_d}:P{fila_d}")
+        estilo(ws, f"O{fila_d}", clave, negrita=True, tam=8,
                color_fondo=AZUL_CLARO, borde=borde_fino, alineacion="left")
-        ws.merge_cells(f"P{fila_d}:S{fila_d}")
-        estilo(ws, f"P{fila_d}", valor, tam=8,
+        ws.merge_cells(f"Q{fila_d}:T{fila_d}")
+        estilo(ws, f"Q{fila_d}", valor, tam=8,
                color_fondo=BLANCO, borde=borde_fino, alineacion="left")
         ws.row_dimensions[fila_d].height = 16
 
     cert_fila = 9 + len(detalles) + 1
-    ws.merge_cells(f"N{cert_fila}:S{cert_fila+2}")
-    estilo(ws, f"N{cert_fila}",
+    ws.merge_cells(f"O{cert_fila}:T{cert_fila+2}")
+    estilo(ws, f"O{cert_fila}",
            f"Certifico que el proceso fue supervisado correctamente\n— {operario} —\n{fecha}",
            negrita=True, italica=True, tam=8,
            color_fondo=VERDE_CLARO, borde=borde_medio, alineacion="center")
@@ -446,8 +449,8 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
 
     # ESTADÍSTICAS
     est_fila = cert_fila + 4
-    ws.merge_cells(f"N{est_fila}:S{est_fila}")
-    estilo(ws, f"N{est_fila}", "RESUMEN DE OBSERVACIONES", negrita=True, tam=10,
+    ws.merge_cells(f"O{est_fila}:T{est_fila}")
+    estilo(ws, f"O{est_fila}", "RESUMEN DE OBSERVACIONES", negrita=True, tam=10,
            color_texto=BLANCO, color_fondo=VERDE, borde=borde_fino)
     ws.row_dimensions[est_fila].height = 20
 
@@ -460,16 +463,16 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
     ]
     for i, (nombre, valor, color) in enumerate(stats):
         fr = est_fila + 1 + i
-        ws.merge_cells(f"N{fr}:P{fr}")
-        estilo(ws, f"N{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
-        ws.merge_cells(f"Q{fr}:S{fr}")
+        ws.merge_cells(f"O{fr}:Q{fr}")
+        estilo(ws, f"O{fr}", nombre, tam=9, color_fondo=color, borde=borde_fino)
+        ws.merge_cells(f"R{fr}:T{fr}")
         pct = f"{valor} ({int(valor/total*100) if total else 0}%)"
-        estilo(ws, f"Q{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
+        estilo(ws, f"R{fr}", pct, negrita=True, tam=9, color_fondo=color, borde=borde_fino)
         ws.row_dimensions[fr].height = 16
 
     # INFO FOTOS
     info_fila = 10 + total + 2
-    ws.merge_cells(f"A{info_fila}:M{info_fila}")
+    ws.merge_cells(f"A{info_fila}:N{info_fila}")
     estilo(ws, f"A{info_fila}",
            "💡 Las fotos están en la carpeta 'imagenes/'. Haz clic en cada enlace de la columna Foto para abrirlas.",
            tam=10, italica=True, color_texto="404040", color_fondo=AMARILLO, borde=borde_fino)
