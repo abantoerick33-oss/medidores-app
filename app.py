@@ -379,7 +379,7 @@ def generar_excel(tabla, fotos_bytes, operario, fecha, lote, nombres_imagenes, o
         registro_inicial_num = registro_inicial_de(datos)
         registro_final_num = registros_finales[idx] if idx < len(registros_finales) else registro_inicial_num
         diferencia_num = registro_final_num - registro_inicial_num
-        vvalores = [
+        valores = [
             idx+1, marca, modelo, datos["serie_medidor"], datos.get("anio_medidor") or "N/D",
             vol_normalizado, "Circular", "Verde",
             datos["serie_precinto"] or "N/D",
